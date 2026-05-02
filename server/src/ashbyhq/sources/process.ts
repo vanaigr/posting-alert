@@ -27,7 +27,9 @@ for(const [url, ...huh] of urls) {
     )
 
     const companySlug = url.slice(prefix.length, nextSlashI)
-    companies.add(decodeURIComponent(companySlug).toLowerCase())
+    const name = decodeURIComponent(companySlug).toLowerCase()
+    if(/^root\..+?_.+?_.+?_.+?_/.test(name)) continue
+    companies.add(name)
 }
 
 fs.writeFileSync(
