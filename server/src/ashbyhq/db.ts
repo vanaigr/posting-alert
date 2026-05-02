@@ -19,6 +19,8 @@ export const job = sqliteTable('job', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
     toFetch: integer('to_fetch').notNull(),
+    shortInfo: text('short_info'),
+    longInfo: text('long_info'),
 })
 
 export function migrate(db: BetterSQLite3Database) {
@@ -43,6 +45,15 @@ export function migrate(db: BetterSQLite3Database) {
         if (version === 1) {
             tx.run(sql`ALTER TABLE job ADD COLUMN to_fetch INTEGER NOT NULL DEFAULT 0`)
             tx.run(sql`PRAGMA user_version = 2`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 2) {
+            tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN long_info TEXT`)
+            tx.run(sql`PRAGMA user_version = 3`)
         }
     })
 }

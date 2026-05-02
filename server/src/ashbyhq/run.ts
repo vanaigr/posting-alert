@@ -7,12 +7,18 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from './db.ts'
+import { populate } from './populate.ts'
 
 async function main() {
     const mainLog = L.makeLogger(undefined, undefined)
 
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
     Db.migrate(db)
+
+    if(db.select({ count: D.count() }).from(Db.company).get()?.count === 0) {
+        mainLog.I('Populating db')
+        populate(db)
+    }
 
     const companiesInProcess = new Set<string>()
 
@@ -103,6 +109,11 @@ async function checkCompany(
             id: job.id,
             companyName: company.name,
             toFetch: initial ? 0 : 1,
+            shortInfo: JSON.stringify({
+                job,
+                team: jobBoard.teams.find(it => it.id === job.teamId) ?? null,
+            }),
+            longInfo: null,
         })
     }
 
