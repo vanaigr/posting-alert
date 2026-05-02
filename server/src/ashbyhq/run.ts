@@ -31,7 +31,6 @@ async function main() {
         const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
 
         const companiesInProcessList = [...companiesInProcess]
-        let quota = 2
 
         const companiesToCheck = db.select().from(Db.company)
             .where(D.and(
@@ -39,55 +38,57 @@ async function main() {
                 D.not(D.inArray(Db.company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
+            .limit(5)
             .all()
-        quota -= companiesToCheck.length
         mainLog.I('Checking ', [companiesToCheck.length], ' companies')
 
-        for(const company of companiesToCheck) {
-            ;(async() => {
-                const log = mainLog.addedCtx(company.name)
+        ;(async() => {
+            try {
+                const companyNames = companiesToCheck.map(it => it.name)
+                for(const it of companiesToCheck) companiesInProcess.add(it.name)
+
+                const result = await getCompaniesDetails(mainLog, companyNames)
+                if(result.status === 'rate-limit') {
+                    rateLimit = true
+                    return
+                }
+
+                db.update(Db.company)
+                    .set({ checkedEpochMs: Date.now() })
+                    .where(D.inArray(Db.company.name, companyNames))
+                    .run()
+
+                if(result.status !== 'ok') return
+
+                for(let i = 0; i < companiesToCheck.length; i++) {
+                    const company = companiesToCheck[i]
+                    const log = mainLog.addedCtx(company.name)
+                    checkCompany(db, log, company, result.data[i])
+                }
+            }
+            catch(err) {
+                mainLog.E('While checking: ', [err])
+            }
+            finally {
+                for(const it of companiesToCheck) companiesInProcess.add(it.name)
+            }
+
+            for(const company of companiesToCheck) {
 
                 companiesInProcess.add(company.name)
-                try {
-                    const result = await checkCompany(db, log, company)
-                    if(result.status === 'rate-limit') rateLimit = true
-                }
-                catch(err) {
-                    log.E('While checking: ', [err])
-                }
-                finally {
-                    companiesInProcess.delete(company.name)
-                }
-            })()
-        }
+            }
+        })()
 
         await U.delay(nextTick)
     }
 }
 
-async function checkCompany(
+function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     company: D.InferSelectModel<typeof Db.company>,
+    jobBoard: ApiJobBoardWithTeams,
 ) {
-    const responseStatus = await fetchGraphql<ApiJobBoardWithTeams>(log, {
-        operationName: 'ApiJobBoardWithTeams',
-        'variables': {
-            organizationHostedJobsPageName: company.name,
-        },
-        query: "query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {\n  jobBoard: jobBoardWithTeams(\n    organizationHostedJobsPageName: $organizationHostedJobsPageName\n  ) {\n    teams {\n      id\n      name\n      externalName\n      parentTeamId\n      __typename\n    }\n    jobPostings {\n      id\n      title\n      teamId\n      locationId\n      locationName\n      workplaceType\n      employmentType\n      secondaryLocations {\n        ...JobPostingSecondaryLocationParts\n        __typename\n      }\n      compensationTierSummary\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {\n  locationId\n  locationName\n  __typename\n}",
-    })
-    if(responseStatus.status === 'rate-limit') return responseStatus
-
-    db.update(Db.company)
-        .set({ checkedEpochMs: Date.now() })
-        .where(D.eq(Db.company.name, company.name))
-        .run()
-
-    if(responseStatus.status !== 'ok') return U.status('ok')
-
-    const jobBoard = responseStatus.data.jobBoard
     if(jobBoard === null) {
         log.I('Company does not exist')
 
@@ -95,7 +96,7 @@ async function checkCompany(
             .set({ exists: 0 })
             .where(D.eq(Db.company.name, company.name))
             .run()
-        return U.status('ok')
+        return
     }
 
     const initial = company.exists === null
@@ -137,30 +138,106 @@ async function checkCompany(
     else {
         log.I('Found ', [toInsert.length], ' new jobs')
     }
-
-    return U.status('ok')
 }
 
-type ApiJobBoardWithTeams = {
-    jobBoard: null | {
-        teams: {
-            id: string,
-            name: string
-            externalName: null
-            parentTeamId: null
-        }[]
-        jobPostings: {
-            id: string
-            title: string
-            teamId: string
-            locationId: string
-            locationName: string
-            workplaceType: string
-            employmentType: string
-            secondaryLocations: string[] // TODO
-            compensationTierSummary: null
-        }[]
+async function getCompaniesDetails(log: L.Log, companies: string[]) {
+    const companiesEncoded = companies.map((_, i) => encodeIndex(i))
+    const header = 'query ApiJobBoardWithTeams('
+        + companiesEncoded.map(it => '$' + it + ': String!').join(', ')
+        + ') {\n'
+
+        const footer = `
+}
+
+fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
+  locationId
+  locationName
+  __typename
+}
+`.trim()
+
+    const boardParams = `
+    teams {
+      id
+      name
+      externalName
+      parentTeamId
+      __typename
     }
+    jobPostings {
+      id
+      title
+      teamId
+      locationId
+      locationName
+      workplaceType
+      employmentType
+      secondaryLocations {
+        ...JobPostingSecondaryLocationParts
+        __typename
+      }
+      compensationTierSummary
+      __typename
+    }
+    __typename
+`.trim()
+
+    const graphql = header
+        + companiesEncoded.map(encoded => {
+            return '  '
+                + encoded
+                + ': jobBoardWithTeams(organizationHostedJobsPageName: $'
+                + encoded
+                + ') {\n    ' + boardParams + '\n  }'
+        }).join('\n')
+        + '\n'
+        + footer
+
+    //console.log(graphql)
+    //return U.status('error')
+
+    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams>>(log, {
+        operationName: 'ApiJobBoardWithTeams',
+        variables: Object.fromEntries(companiesEncoded.map((encoded, i) => [encoded, companies[i]])),
+        query: graphql,
+    })
+    if(responseStatus.status !== 'ok') return responseStatus
+
+    return U.result(
+        'ok',
+        companiesEncoded.map(encoded => responseStatus.data[encoded]),
+    )
+}
+
+
+function encodeIndex(n: number) {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    let result = ''
+    do {
+        result = alphabet[n % alphabet.length] + result
+        n = Math.floor(n / alphabet.length)
+    } while(n > 0)
+    return result
+}
+
+type ApiJobBoardWithTeams = null | {
+    teams: {
+        id: string,
+        name: string
+        externalName: null
+        parentTeamId: null
+    }[]
+    jobPostings: {
+        id: string
+        title: string
+        teamId: string
+        locationId: string
+        locationName: string
+        workplaceType: string
+        employmentType: string
+        secondaryLocations: string[] // TODO
+        compensationTierSummary: null
+    }[]
 }
 
 async function fetchGraphql<T extends {}>(log: L.Log, body: any) {

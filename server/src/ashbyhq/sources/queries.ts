@@ -126,7 +126,7 @@ const body = {
     },
     "query": `
 query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
-  jobBoard: jobBoardWithTeams(
+  jobBoard1: jobBoardWithTeams(
     organizationHostedJobsPageName: $organizationHostedJobsPageName
   ) {
     teams {
