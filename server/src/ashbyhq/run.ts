@@ -10,7 +10,7 @@ import * as Db from './db.ts'
 import { populate } from './populate.ts'
 
 async function main() {
-    const mainLog = L.makeLogger(undefined, undefined)
+    const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
 
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
     Db.migrate(db)
@@ -21,10 +21,14 @@ async function main() {
     }
 
     const companiesInProcess = new Set<string>()
+    let rateLimit = false
 
     while(true) {
+        if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
+        rateLimit = false
+
         mainLog.I('Tick')
-        const nextTick = T.Now.instant().add({ seconds: 1 })
+        const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
 
         const companiesInProcessList = [...companiesInProcess]
         let quota = 2
@@ -46,7 +50,8 @@ async function main() {
 
                 companiesInProcess.add(company.name)
                 try {
-                    await checkCompany(db, log, company)
+                    const result = await checkCompany(db, log, company)
+                    if(result.status === 'rate-limit') rateLimit = true
                 }
                 catch(err) {
                     log.E('While checking: ', [err])
@@ -73,13 +78,14 @@ async function checkCompany(
         },
         query: "query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {\n  jobBoard: jobBoardWithTeams(\n    organizationHostedJobsPageName: $organizationHostedJobsPageName\n  ) {\n    teams {\n      id\n      name\n      externalName\n      parentTeamId\n      __typename\n    }\n    jobPostings {\n      id\n      title\n      teamId\n      locationId\n      locationName\n      workplaceType\n      employmentType\n      secondaryLocations {\n        ...JobPostingSecondaryLocationParts\n        __typename\n      }\n      compensationTierSummary\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {\n  locationId\n  locationName\n  __typename\n}",
     })
+    if(responseStatus.status === 'rate-limit') return responseStatus
 
     db.update(Db.company)
         .set({ checkedEpochMs: Date.now() })
         .where(D.eq(Db.company.name, company.name))
         .run()
 
-    if(responseStatus.status !== 'ok') return
+    if(responseStatus.status !== 'ok') return U.status('ok')
 
     const jobBoard = responseStatus.data.jobBoard
     if(jobBoard === null) {
@@ -89,7 +95,7 @@ async function checkCompany(
             .set({ exists: 0 })
             .where(D.eq(Db.company.name, company.name))
             .run()
-        return
+        return U.status('ok')
     }
 
     const initial = company.exists === null
@@ -131,6 +137,8 @@ async function checkCompany(
     else {
         log.I('Found ', [toInsert.length], ' new jobs')
     }
+
+    return U.status('ok')
 }
 
 type ApiJobBoardWithTeams = {
@@ -172,7 +180,7 @@ async function fetchGraphql<T extends {}>(log: L.Log, body: any) {
         if(response.status === 429) {
             log.E('Rate limited')
             await response.text().catch(() => {})
-            return U.status('error')
+            return U.status('rate-limit')
         }
         if(!response.ok) {
             log.E(
