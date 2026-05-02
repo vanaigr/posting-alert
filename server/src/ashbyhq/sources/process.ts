@@ -27,11 +27,11 @@ for(const [url, ...huh] of urls) {
     )
 
     const companySlug = url.slice(prefix.length, nextSlashI)
-    companies.add(companySlug)
+    companies.add(decodeURIComponent(companySlug).toLowerCase())
 }
 
 fs.writeFileSync(
-    path.join(import.meta.dirname, 'companySlugs.json'),
+    path.join(import.meta.dirname, 'companyNames.json'),
     JSON.stringify([...companies]),
 )
 

@@ -9,7 +9,7 @@ import * as Db from './db.ts'
 export const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
 Db.migrate(db)
 
-const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companySlugs.json')).toString())
+const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
 
 db.insert(Db.company)
     .values(companyNames.map(it => ({ name: it, checkedEpochMs: null, exists: null })))

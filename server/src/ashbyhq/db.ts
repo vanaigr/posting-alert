@@ -2,6 +2,13 @@ import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { sql } from 'drizzle-orm'
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
+import Database from 'better-sqlite3'
+import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core'
+
+function dbVersion(db: BetterSQLite3Database | SQLiteTransaction<"sync", Database.RunResult, Record<string, never>, never>) {
+    return (db.get(sql`PRAGMA user_version`) as { user_version: number }).user_version
+}
+
 export const company = sqliteTable('company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
@@ -11,11 +18,12 @@ export const company = sqliteTable('company', {
 export const job = sqliteTable('job', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
+    toFetch: integer('to_fetch').notNull(),
 })
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
-        const version = (tx.get(sql`PRAGMA user_version`) as { user_version: number }).user_version
+        const version = dbVersion(tx)
         if (version === 0) {
             tx.run(sql`CREATE TABLE company (
                 name TEXT PRIMARY KEY,
@@ -27,6 +35,14 @@ export function migrate(db: BetterSQLite3Database) {
                 company_name TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 1`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 1) {
+            tx.run(sql`ALTER TABLE job ADD COLUMN to_fetch INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`PRAGMA user_version = 2`)
         }
     })
 }

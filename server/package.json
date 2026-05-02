@@ -8,6 +8,7 @@
     "dependencies": {
         "better-sqlite3": "^12.9.0",
         "dotenv": "^17.4.2",
-        "drizzle-orm": "^0.45.2"
+        "drizzle-orm": "^0.45.2",
+        "temporal-polyfill": "^0.3.2"
     }
 }
