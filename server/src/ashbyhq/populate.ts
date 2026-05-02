@@ -17,5 +17,6 @@ export function populate(db: BetterSQLite3Database) {
 if(import.meta.main) {
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
     Db.migrate(db)
+    populate(db)
     console.log('done')
 }
