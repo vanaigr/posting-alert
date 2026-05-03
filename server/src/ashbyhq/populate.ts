@@ -4,12 +4,12 @@ import 'dotenv/config'
 import Database from 'better-sqlite3'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
-import * as Db from './db.ts'
+import * as Db from '../lib/db.ts'
 
 export function populate(db: BetterSQLite3Database) {
     const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
 
-    db.insert(Db.company)
+    db.insert(Db.aCompany)
         .values(companyNames.map(it => ({ name: it, checkedEpochMs: null, exists: null })))
         .onConflictDoNothing()
         .execute()

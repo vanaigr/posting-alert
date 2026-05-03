@@ -6,7 +6,9 @@ import Database from 'better-sqlite3'
 import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
-import * as Db from './db.ts'
+import * as Db from '../lib/db.ts'
+
+const { aCompany: Company, aJob: Job } = Db
 
 const cities: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'cities.json')).toString())
 const states: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'states.json')).toString())
@@ -36,7 +38,7 @@ export type Tiers = {
 export function calculateTiers(db: BetterSQLite3Database) {
     const relevantJobsByCompany = new Map<string, Job[]>()
 
-    for(const job of db.select().from(Db.job).all()) {
+    for(const job of db.select().from(Job).all()) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
         if(!infoRaw) continue
         const info: Job = {
@@ -55,7 +57,7 @@ export function calculateTiers(db: BetterSQLite3Database) {
     const relevantCompanies: string[] = []
     //const irrelevantCompanies: string[] = []
 
-    const allCompanies = db.select().from(Db.company).where(D.eq(Db.company.exists, 1)).all()
+    const allCompanies = db.select().from(Company).where(D.eq(Company.exists, 1)).all()
 
     for(const company of allCompanies) {
         const relevantJobs = relevantJobsByCompany.get(company.name)

@@ -6,10 +6,12 @@ import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
-import * as Db from './db.ts'
+import * as Db from '../lib/db.ts'
 import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
 import * as N from '../lib/network.ts'
+
+const { aCompany: Company, aJob: Job } = Db
 
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
@@ -59,32 +61,32 @@ async function main() {
 
         const companiesInProcessList = [...companiesInProcess]
 
-        const desiredCompaniesToCheck = db.select().from(Db.company)
+        const desiredCompaniesToCheck = db.select().from(Company)
             .where(D.and(
-                D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
-                D.inArray(Db.company.name, tiers.desiredCompanies),
-                D.not(D.inArray(Db.company.name, companiesInProcessList)),
+                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
+                D.inArray(Company.name, tiers.desiredCompanies),
+                D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
-            .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(desiredCount) // NOTE: may get less but unlikely
             .all()
-        const relevantCompaniesToCheck = db.select().from(Db.company)
+        const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
-                D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
-                D.inArray(Db.company.name, tiers.relevantCompanies),
-                D.not(D.inArray(Db.company.name, companiesInProcessList)),
+                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
+                D.inArray(Company.name, tiers.relevantCompanies),
+                D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
-            .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(relevantCount)
             .all()
-        const otherCompaniesToCheck = db.select().from(Db.company)
+        const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
-                D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
-                D.not(D.inArray(Db.company.name, tiers.desiredCompanies)),
-                D.not(D.inArray(Db.company.name, tiers.relevantCompanies)),
-                D.not(D.inArray(Db.company.name, companiesInProcessList)),
+                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
+                D.not(D.inArray(Company.name, tiers.desiredCompanies)),
+                D.not(D.inArray(Company.name, tiers.relevantCompanies)),
+                D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
-            .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(otherCount)
             .all()
 
@@ -110,9 +112,9 @@ async function main() {
 
                 const currentTime = Date.now()
 
-                db.update(Db.company)
+                db.update(Company)
                     .set({ checkedEpochMs: currentTime })
-                    .where(D.inArray(Db.company.name, companyNames))
+                    .where(D.inArray(Company.name, companyNames))
                     .run()
 
                 if(result.status !== 'ok') return
@@ -139,15 +141,15 @@ function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
-    company: D.InferSelectModel<typeof Db.company>,
+    company: D.InferSelectModel<typeof Company>,
     jobBoard: ApiJobBoardWithTeams,
 ) {
     if(jobBoard === null) {
         log.I('Company does not exist')
 
-        db.update(Db.company)
+        db.update(Company)
             .set({ exists: 0 })
-            .where(D.eq(Db.company.name, company.name))
+            .where(D.eq(Company.name, company.name))
             .run()
         return
     }
@@ -156,14 +158,13 @@ function checkCompany(
 
     const existingJobs = new Set(
         db.select()
-            .from(Db.job)
-            .where(D.eq(Db.job.companyName, company.name))
+            .from(Job)
+            .where(D.eq(Job.companyName, company.name))
             .all()
             .map(it => it.id)
     )
 
-    const toInsert: D.InferSelectModel<typeof Db.job>[] = []
-    const relevant: string[] = []
+    const toInsert: D.InferSelectModel<typeof Job>[] = []
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
@@ -197,7 +198,6 @@ function checkCompany(
                 true
             ) {
                 log.I('Job ', job.id, ' is relevant!')
-                relevant.push(job.id)
 
                 ;(async(log) => {
                     try {
@@ -227,15 +227,12 @@ function checkCompany(
     }
 
     db.transaction(db => {
-        db.update(Db.company)
+        db.update(Company)
             .set({ exists: 1 })
-            .where(D.eq(Db.company.name, company.name))
+            .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
-            db.insert(Db.job).values(toInsert).run()
-        }
-        if(relevant.length > 0) {
-            db.insert(Db.toReview).values(relevant.map(it => ({ id: it }))).run()
+            db.insert(Job).values(toInsert).run()
         }
     })
 
