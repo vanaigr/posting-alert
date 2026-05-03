@@ -41,3 +41,4 @@ yarn-error.*
 /android
 
 /google-services.json
+/fcm.config.ts

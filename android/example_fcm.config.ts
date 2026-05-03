@@ -3,7 +3,7 @@
 // google-services.json (downloaded from the Firebase console) — they are not
 // duplicated here.
 
-export const ANDROID_PACKAGE = "io.github.vanaigr.jobalert";
+export const ANDROID_PACKAGE = "com.myapp";
 
 // Path (relative to project root) to the google-services.json you downloaded
 // from Firebase console -> Project settings -> Your apps -> Android app.
