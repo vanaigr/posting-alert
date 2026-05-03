@@ -231,7 +231,7 @@ function TokenBox() {
 
     return <View style={styles.box}>
         <Details title='FCM device token'>
-            <Text>{error ? `ERROR: ${error}` : (token ?? "Loading…")}</Text>
+            <Text selectable>{error ? `ERROR: ${error}` : (token ?? "Loading…")}</Text>
         </Details>
     </View>
 
