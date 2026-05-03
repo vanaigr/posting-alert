@@ -42,25 +42,23 @@ async function main() {
         mainLog.I('Tick')
         const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
 
-        let desiredCount = 0
-        let relevantCount = 0
-        let otherCount = 0
+        let desiredMax = 0
+        let relevantMax = 0
+        let otherMax = 0
         // TODO: this is biased if e.g. there's 100500 desired and 5 relevant.
         for(let i = 0; i < 5; i++) {
             const v = Math.random()
-            if(v < 0.5) {
-                desiredCount++
-            }
-            else if(v < 0.75) {
-                relevantCount++
-            }
-            else {
-                otherCount++
-            }
+
+            otherMax++
+            if(v < 0.25) continue
+            relevantMax++
+            if(v < 0.5) continue
+            desiredMax++
         }
 
         const companiesInProcessList = [...companiesInProcess]
 
+        let fetched = 0
         const desiredCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
@@ -68,8 +66,9 @@ async function main() {
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(desiredCount) // NOTE: may get less but unlikely
+            .limit(desiredMax - fetched)
             .all()
+        fetched += desiredCompaniesToCheck.length
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
@@ -77,8 +76,9 @@ async function main() {
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(relevantCount)
+            .limit(relevantMax - fetched)
             .all()
+        fetched += relevantCompaniesToCheck.length
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
@@ -87,8 +87,9 @@ async function main() {
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(otherCount)
+            .limit(otherMax - fetched)
             .all()
+        fetched += otherCompaniesToCheck.length
 
         mainLog.I(
             'Checking: ',
