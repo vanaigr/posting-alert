@@ -78,7 +78,6 @@ export function calculateTiers(db: BetterSQLite3Database) {
         relevantCompanies,
         //irrelevantCompanies,
     }
-    //console.log(util.inspect(desiredCompanies, { maxArrayLength: Infinity }))
 }
 
 const titleRegex = /(engineer|developer|programmer)/i
@@ -102,7 +101,7 @@ function isRemoteNationwide(location: string) {
 export function isRelevantLocationDesired(job: Job) {
     return job.locations.some(location => {
         return location.includes('IL')
-            || location.toLowerCase().includes('chicago')
+            || /(illinois|chicago)/i.test(location)
             || isRemoteNationwide(location)
     })
 }
@@ -124,6 +123,8 @@ function regexEscape(str: string) {
 if(import.meta.main) {
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
     Db.migrate(db)
-    tier(db)
+    const tiers = calculateTiers(db)
+    console.log(tiers.desiredCompanies.length, tiers.relevantCompanies.length)
+    //console.log(util.inspect(tiers.desiredCompanies, { maxArrayLength: Infinity }))
     console.log('done')
 }
