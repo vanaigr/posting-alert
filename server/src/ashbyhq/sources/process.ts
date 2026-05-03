@@ -8,29 +8,55 @@ curl -G 'https://web.archive.org/cdx/search/cdx' \
     --data-urlencode 'output=json' \
     --data-urlencode 'fl=original' \
     --data-urlencode 'collapse=urlkey' \
-    > ashby-urls.json
+    > archive-urls.json
+
+gau --o gau_urls.txt jobs.ashbyhq.com
+
 */
 
-const urls: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'ashby-urls.json')).toString())
+const urls1: string[][] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'archive-urls.json')).toString())
+const urls2: string[] = fs.readFileSync(path.join(import.meta.dirname, 'gau-urls.txt')).toString().split('\n')
 
-const prefix = 'https://jobs.ashbyhq.com/'
+const httpPrefix = 'http://jobs.ashbyhq.com/'
+const httpsPrefix = 'https://jobs.ashbyhq.com/'
 
 const companies = new Set<string>()
-for(const [url, ...huh] of urls) {
-    if(huh.length > 0) console.log('huh')
-    if(!url.startsWith(prefix)) continue
+function addUrl(url: string) {
+    let prefixLen: number | undefined
+
+    if(url.startsWith(httpsPrefix)) {
+        prefixLen = httpsPrefix.length
+    }
+    else if(url.startsWith(httpPrefix)) {
+        prefixLen = httpPrefix.length
+    }
+
+    if(prefixLen === undefined) {
+        console.log('invalid url', url)
+        return
+    }
 
     const nextSlashI = Math.min(
-        goodIndexOf(url, '/', prefix.length),
-        goodIndexOf(url, '?', prefix.length),
-        goodIndexOf(url, '#', prefix.length),
+        goodIndexOf(url, '/', prefixLen),
+        goodIndexOf(url, '?', prefixLen),
+        goodIndexOf(url, '#', prefixLen),
     )
 
-    const companySlug = url.slice(prefix.length, nextSlashI)
+    const companySlug = url.slice(prefixLen, nextSlashI)
     const name = decodeURIComponent(companySlug).toLowerCase()
-    if(/^root\..+?_.+?_.+?_.+?_/.test(name)) continue
+    if(/^root\..+?_.+?_.+?_.+?_/.test(name)) return
     companies.add(name)
 }
+
+for(const [url, ...huh] of urls1) {
+    if(huh.length > 0) console.log('huh')
+    addUrl(url)
+}
+for(const url of urls2) {
+    addUrl(url)
+}
+
+console.log('Found', companies.size, 'companies')
 
 fs.writeFileSync(
     path.join(import.meta.dirname, 'companyNames.json'),

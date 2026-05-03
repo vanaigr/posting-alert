@@ -21,10 +21,7 @@ async function main() {
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
     Db.migrate(db)
 
-    if(db.select({ count: D.count() }).from(Db.company).get()?.count === 0) {
-        mainLog.I('Populating db')
-        populate(db)
-    }
+    populate(db)
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false

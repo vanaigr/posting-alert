@@ -11,6 +11,7 @@ export function populate(db: BetterSQLite3Database) {
 
     db.insert(Db.company)
         .values(companyNames.map(it => ({ name: it, checkedEpochMs: null, exists: null })))
+        .onConflictDoNothing()
         .execute()
 }
 
