@@ -133,7 +133,7 @@ function JobList() {
                             <Text>
                                 {job.currentTime === undefined
                                     ? 'Unknown ago'
-                                    : Math.max(999, (Date.now() - job.currentTime) / (1000 * 60)) + ' min ago'
+                                    : Math.min(999, Math.floor((Date.now() - job.currentTime) / (1000 * 60))) + ' min ago'
                                 }
                             </Text>
                         </View>
