@@ -38,6 +38,18 @@ function JobList() {
     const [reload, setReload] = R.useState(0)
     const [jobsResult, setJobsResult] = R.useState<JobsResult>({ status: 'pending' })
 
+    const [time, setTime] = R.useState(Date.now())
+
+    R.useEffect(() => {
+        const cancelId = setInterval(() => {
+            setTime(Date.now())
+        }, 60 * 1000)
+
+        return () => {
+            clearInterval(cancelId)
+        }
+    }, [])
+
     R.useEffect(() => {
         ;(async() => {
             const response = await fetch(
@@ -133,7 +145,7 @@ function JobList() {
                             <Text>
                                 {job.currentTime === undefined
                                     ? 'Unknown ago'
-                                    : Math.min(999, Math.floor((Date.now() - job.currentTime) / (1000 * 60))) + ' min ago'
+                                    : Math.min(999, Math.floor((time - job.currentTime) / (1000 * 60))) + ' min ago'
                                 }
                             </Text>
                         </View>
