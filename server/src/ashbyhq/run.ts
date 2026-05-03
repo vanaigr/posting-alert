@@ -168,6 +168,9 @@ function checkCompany(
     const relevant: string[] = []
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
+
+        log.I('New job ', [job.id])
+
         toInsert.push({
             id: job.id,
             companyName: company.name,
@@ -188,9 +191,12 @@ function checkCompany(
         }
 
         if(
+            /*
             Tiers.isTitleDesired(info)
                 && Tiers.isLocationRelevant(info)
                 && Tiers.isRelevantLocationDesired(info)
+            */
+            true
         ) {
             log.I('Job ', job.id, ' is relevant!')
             relevant.push(job.id)

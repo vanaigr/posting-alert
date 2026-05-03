@@ -30,6 +30,7 @@ type Job = {
     location: string
     url: string
     currentTime: number | undefined
+    desired: boolean
 }
 
 type JobsResult = { status: 'pending' } | { status: 'error', data: unknown } | { status: 'ok', data: Job[] }
@@ -75,6 +76,7 @@ function JobList() {
                     ].join('; '),
                     url: `https://jobs.ashbyhq.com/${encodeURIComponent(it.companyName)}/${encodeURIComponent(it.id)}`,
                     currentTime: it.fetchedEpochMs ?? undefined,
+                    desired: it.desired,
                 }
             })
             jobs.sort((a, b) => {
@@ -150,7 +152,7 @@ function JobList() {
                             </Text>
                         </View>
                     </TouchableOpacity>
-                    <View>
+                    <View style={{ display: 'flex', flexDirection: 'column' }}>
                         <TouchableOpacity
                             onPress={() => {
                                 ;(async() => {
@@ -179,6 +181,10 @@ function JobList() {
                         >
                             <Ionicons name='trash' size={17} color='#606060'/>
                         </TouchableOpacity>
+                        <View style={{ flex: 1 }}/>
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                            <View style={{ width: 8, height: 8, backgroundColor: job.desired ? '#e23030' : '#707070', borderRadius: 999 }}/>
+                        </View>
                     </View>
                 </View>
             })}

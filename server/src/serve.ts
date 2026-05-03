@@ -11,6 +11,8 @@ import * as L from './lib/log.ts'
 import * as T from './lib/temporal.ts'
 import * as Db from './ashbyhq/db.ts'
 
+import * as Tiers from './tier.ts'
+
 async function main() {
     const mainLog = L.makeLogger(process.env.SERVE_LOG_PATH || undefined, undefined)
 
@@ -43,7 +45,22 @@ async function main() {
             .innerJoin(Db.job, D.eq(Db.toReview.id, Db.job.id))
             .all()
 
-        return q.json(jobs.map(it => it.job))
+        return q.json(jobs.map(it => {
+            const shortInfo = JSON.parse(it.job.shortInfo ?? '{}')
+
+            const info = {
+                id: it.job.id,
+                title: shortInfo.title,
+                locations: Tiers.getJobLocation(it.job),
+                workplaceType: shortInfo.workplaceType,
+            }
+
+            const desired = Tiers.isTitleDesired(info)
+                && Tiers.isLocationRelevant(info)
+                && Tiers.isRelevantLocationDesired(info)
+
+            return { ...it.job, desired }
+        }))
     })
 
     app.delete('/jobs/:id', (q) => {
