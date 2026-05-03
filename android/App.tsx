@@ -82,11 +82,11 @@ function JobList() {
 
                 if(a.currentTime === undefined || b.currentTime ===  undefined) {
                     diff = (a.currentTime === undefined ? 0 : 1) - (b.currentTime === undefined ? 0 : 1)
-                    return diff
+                    return -diff
                 }
 
                 diff = a.currentTime - b.currentTime
-                if(diff !== 0) return diff
+                if(diff !== 0) return -diff
 
                 return 0
             })
