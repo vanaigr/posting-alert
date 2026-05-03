@@ -154,6 +154,14 @@ function JobList() {
                         <TouchableOpacity
                             onPress={() => {
                                 ;(async() => {
+                                    setJobsResult(jobsResult => {
+                                        if(jobsResult.status !== 'ok') return jobsResult
+                                        return {
+                                            ...jobsResult,
+                                            data: jobsResult.data.filter(it => it !== job),
+                                        }
+                                    })
+
                                     const response = await fetch(
                                         new URL('jobs/' + encodeURIComponent(job.id), FCM.SERVER_URL),
                                         {
@@ -163,14 +171,6 @@ function JobList() {
                                     )
                                     if(!response.ok) throw new Error(`${response.status}: ${response.text()}`)
                                     await response.json()
-
-                                    setJobsResult(jobsResult => {
-                                        if(jobsResult.status !== 'ok') return jobsResult
-                                        return {
-                                            ...jobsResult,
-                                            data: jobsResult.data.filter(it => it !== job),
-                                        }
-                                    })
                                 })()
                                     .catch(err => {
                                         ToastAndroid.show('Error: ' + err, ToastAndroid.LONG)
