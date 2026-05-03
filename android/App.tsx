@@ -13,6 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from "expo-notifications";
 import * as FCM from "./fcm.config.ts";
 
+Notifications.setNotificationHandler({
+    // there's no documentation in Expo of what those properties are
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true
+    }),
+});
+
 export default function App() {
     return (
         <ScrollView contentContainerStyle={styles.container}>
