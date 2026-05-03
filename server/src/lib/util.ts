@@ -81,3 +81,55 @@ export function regexEscape(str: string) {
     return RegExp.escape(str)
 }
 
+export function selectCompanies<T>(tiers: T[][], probabilities: number[], quota: number): number[] {
+    const selectCounts = Array(tiers.length).fill(0)
+    const candidateTierIndices: number[] = []
+    // TODO: this is biased if e.g. there's 100500 tier0 and 5 tier1.
+    for(let iteration = 0; iteration < quota; iteration++) {
+        candidateTierIndices.length = 0
+        let totalProbability = 0
+        for(let tierI = 0; tierI < tiers.length; tierI++) {
+            if(selectCounts[tierI] >= tiers[tierI].length) continue
+            const probability = probabilities[tierI]
+            if(probability <= 0) continue
+            candidateTierIndices.push(tierI)
+            totalProbability += probability
+        }
+        if(candidateTierIndices.length === 0) break
+
+        const v = Math.random() * totalProbability
+
+        let sum = 0
+        let tierIndexIndex = 0
+        for(; tierIndexIndex < candidateTierIndices.length - 1; tierIndexIndex++) {
+            sum += probabilities[candidateTierIndices[tierIndexIndex]]
+            if(v < sum) break
+        }
+
+        selectCounts[candidateTierIndices[tierIndexIndex]]++
+    }
+
+    return selectCounts
+}
+
+export async function sendMessage(log: L.Log, message: string) {
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: process.env.TELEGRAM_CHAT_ID,
+                text: message,
+            })
+        })
+        if(!response.ok) throw new Error(`${response.status}: ${await response.text().catch(it => it)}`)
+        const body = await response.json()
+        if(!body.ok) {
+            throw new Error(`Telegram error: ${body.description}`)
+        }
+        log.I('Sent successfully')
+    }
+    catch(err) {
+        log.E('While sending notification: ', [err])
+    }
+}

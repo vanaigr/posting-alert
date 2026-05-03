@@ -76,7 +76,7 @@ export function isTitleDesired(title: string) {
 export function getJobLocations(job: any) {
     return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
 }
-function isLocationRelevant(job: any) {
+export function isLocationRelevant(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
         const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
@@ -86,7 +86,7 @@ function isLocationRelevant(job: any) {
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
     })
 }
-function isLocationDesired(job: any) {
+export function isLocationDesired(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
         const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)

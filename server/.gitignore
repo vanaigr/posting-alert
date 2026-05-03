@@ -1,4 +1,7 @@
 /ashbyhq.db
+/sqlite.db
+/sqlite.db-journal
 /ashby.log
+/run.log
 /serve.log
 /.env

@@ -22,7 +22,10 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .onConflictDoNothing()
             .execute()
         mainLog.I('Populated companies')
-    })
+    })()
+
+    const companiesInProcess = new Set<string>()
+    let rateLimit = false
 
     let tiers: Tiers = calculateTiers(db)
     mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
@@ -32,17 +35,240 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
     }, 30 * 60 * 1000)
 
+    const connection = N.createConnection('https://jobs.lever.co')
 
+    while(true) {
+        if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
+        rateLimit = false
+
+        mainLog.I('Tick')
+        const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
+
+        const companiesInProcessList = [...companiesInProcess]
+        const quota = 5
+        const desiredCompaniesToCheck = db.select().from(Company)
+            .where(D.or(
+                D.isNull(Company.exists),
+                D.and(
+                    D.eq(Company.exists, 1),
+                    D.inArray(Company.name, tiers.desiredCompanies),
+                    D.not(D.inArray(Company.name, companiesInProcessList)),
+                ),
+            ))
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(quota)
+            .all()
+        const relevantCompaniesToCheck = db.select().from(Company)
+            .where(D.and(
+                D.eq(Company.exists, 1),
+                D.inArray(Company.name, tiers.relevantCompanies),
+                D.not(D.inArray(Company.name, companiesInProcessList)),
+            ))
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(quota)
+            .all()
+        const otherCompaniesToCheck = db.select().from(Company)
+            .where(D.and(
+                D.eq(Company.exists, 1),
+                D.not(D.inArray(Company.name, tiers.desiredCompanies)),
+                D.not(D.inArray(Company.name, tiers.relevantCompanies)),
+                D.not(D.inArray(Company.name, companiesInProcessList)),
+            ))
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(quota)
+            .all()
+
+        const tiersCounts = U.selectCompanies(
+            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
+            [1, 0, 0],
+            //[0.5, 0.25, 0.25],
+            quota,
+        )
+        desiredCompaniesToCheck.length = tiersCounts[0]
+        relevantCompaniesToCheck.length = tiersCounts[1]
+        otherCompaniesToCheck.length = tiersCounts[2]
+
+        mainLog.I(
+            'Checking: ',
+            [desiredCompaniesToCheck.length], ', ',
+            [relevantCompaniesToCheck.length], ', ',
+            [otherCompaniesToCheck.length], ', ',
+        )
+
+        const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
+        const currentTime = Date.now()
+
+        for(const company of companiesToCheck) {
+            const log = mainLog.addedCtx(company.name)
+
+            ;(async() => {
+                try {
+                    companiesInProcess.add(company.name)
+                    const result = await checkCompany(db, log, currentTime, connection, company)
+                    if(result.status === 'rate-limit') rateLimit = true
+                }
+                catch(err) {
+                    log.E('While checking: ', [err])
+                }
+                finally {
+                    companiesInProcess.delete(company.name)
+                }
+            })()
+        }
+
+        await U.delay(nextTick)
+    }
 }
 
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-    const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
+async function checkCompany(
+    db: BetterSQLite3Database,
+    log: L.Log,
+    currentTime: number,
+    connection: N.Connection,
+    company: D.InferSelectModel<typeof Company>,
+) {
+    const result = await requestCompany(log, connection, company.name)
+    if(result.status === 'rate-limit') return result
 
-    const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
-    Db.migrate(db)
+    db.update(Company)
+        .set({ checkedEpochMs: currentTime })
+        .where(D.eq(Company.name, company.name))
+        .run()
 
-await run(db, mainLog)
+    if(result.status === 'not-found') {
+        log.I('Company does not exist')
+
+        db.update(Company)
+            .set({ exists: 0 })
+            .where(D.eq(Company.name, company.name))
+            .run()
+        return U.status('ok')
+    }
+
+    if(result.status !== 'ok') return U.status('ok')
+
+    const initial = company.exists === null
+
+    const existingJobs = new Set(
+        db.select()
+            .from(Job)
+            .where(D.eq(Job.companyName, company.name))
+            .all()
+            .map(it => it.id)
+    )
+
+    const toInsert: D.InferSelectModel<typeof Job>[] = []
+    for(const job of result.data) {
+        if(existingJobs.has(job.id)) continue
+
+        toInsert.push({
+            id: job.id,
+            companyName: company.name,
+            fetchedEpochMs: currentTime,
+            info: JSON.stringify({
+                applyUrl: job.applyUrl,
+                categories: job.categories,
+                country: job.country,
+                createdAt: job.createdAt,
+                hostedUrl: job.hostedUrl,
+                text: job.text,
+                workplaceType: job.workplaceType,
+            } satisfies JobInfo),
+        })
+
+        if(!initial) {
+            log.I('New job ', [job.id])
+            if(isTitleRelevant(job.text) && isLocationRelevant(job)) {
+                log.I('Job ', job.id, ' is relevant!')
+
+                U.sendMessage(
+                    log.addedCtx('job ', [job.id]),
+                    job.text + ' @ ' + company.name + '\n'
+                        + job.categories.allLocations.join(' | ') + '\n'
+                        + (job.hostedUrl || job.applyUrl),
+                )
+            }
+        }
+    }
+
+    db.transaction(db => {
+        db.update(Company)
+            .set({ exists: 1 })
+            .where(D.eq(Company.name, company.name))
+            .run()
+        if(toInsert.length > 0) {
+            db.insert(Job).values(toInsert).run()
+        }
+    })
+
+    if(initial) {
+        log.I('Found ', [toInsert.length], ' jobs')
+    }
+    else {
+        log.I('Found ', [toInsert.length], ' new jobs')
+    }
+
+    return U.status('ok')
+}
+
+async function requestCompany(log: L.Log, connection: N.Connection, companyName: string) {
+    try {
+        const response = await N.fetch(connection, {
+            method: 'GET',
+            path: '/v0/postings/' + encodeURIComponent(companyName),
+        })
+        if(response.statusCode === 429) {
+            log.E('Rate limited')
+            await response.body.text().catch(() => {})
+            return U.status('rate-limit')
+        }
+        if(response.statusCode === 404) {
+            await response.body.text().catch(() => {})
+            return U.status('not-found')
+        }
+
+        if(response.statusCode !== 200) {
+            log.E('Request failed: ', [response.statusCode], ': ', [await response.body.text().catch(err => err)])
+            return U.status('error')
+        }
+
+        const json = await response.body.json() as FetchJob[]
+        return U.result('ok', json)
+    }
+    catch(err) {
+        log.E('While requesting: ', [err])
+        return U.status('error')
+    }
+}
+
+type FetchJob = {
+    additionalPlain: string
+    additional: string
+    categories: {
+        commitment: string
+        department: string
+        location: string
+        team: string
+        allLocations: string[]
+    },
+    createdAt: number
+    descriptionPlain: string
+    description: string
+    id: string
+    lists: {
+        text: string
+        content: string
+    }[]
+    text: string
+    country: string
+    workplaceType: string
+    opening: string
+    openingPlain: string
+    descriptionBody: string
+    descriptionBodyPlain: string
+    hostedUrl: string
+    applyUrl: string
+}
 
 type Tiers = {
     desiredCompanies: string[]
@@ -103,7 +329,7 @@ type Job = {
 }
 
 type JobInfo = {
-    //applyUrl: string
+    applyUrl: string
     categories: {
         allLocations: string[]
         commitment: string

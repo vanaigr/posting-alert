@@ -35,54 +35,48 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick')
         const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
 
-        let desiredMax = 0
-        let relevantMax = 0
-        let otherMax = 0
-        // TODO: this is biased if e.g. there's 100500 desired and 5 relevant.
-        for(let i = 0; i < 5; i++) {
-            const v = Math.random()
-
-            otherMax++
-            if(v < 0.25) continue
-            relevantMax++
-            if(v < 0.5) continue
-            desiredMax++
-        }
-
         const companiesInProcessList = [...companiesInProcess]
-
-        let fetched = 0
+        const quota = 5
         const desiredCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
-                D.inArray(Company.name, tiers.desiredCompanies),
-                D.not(D.inArray(Company.name, companiesInProcessList)),
+            .where(D.or(
+                D.isNull(Company.exists),
+                D.and(
+                    D.eq(Company.exists, 1),
+                    D.inArray(Company.name, tiers.desiredCompanies),
+                    D.not(D.inArray(Company.name, companiesInProcessList)),
+                ),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(desiredMax - fetched)
+            .limit(quota)
             .all()
-        fetched += desiredCompaniesToCheck.length
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
-                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
+                D.eq(Company.exists, 1),
                 D.inArray(Company.name, tiers.relevantCompanies),
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(relevantMax - fetched)
+            .limit(quota)
             .all()
-        fetched += relevantCompaniesToCheck.length
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
-                D.or(D.eq(Company.exists, 1), D.isNull(Company.exists)),
+                D.eq(Company.exists, 1),
                 D.not(D.inArray(Company.name, tiers.desiredCompanies)),
                 D.not(D.inArray(Company.name, tiers.relevantCompanies)),
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(otherMax - fetched)
+            .limit(quota)
             .all()
-        fetched += otherCompaniesToCheck.length
+
+        const tiersCounts = U.selectCompanies(
+            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
+            [0.5, 0.25, 0.25],
+            quota,
+        )
+        desiredCompaniesToCheck.length = tiersCounts[0]
+        relevantCompaniesToCheck.length = tiersCounts[1]
+        otherCompaniesToCheck.length = tiersCounts[2]
 
         mainLog.I(
             'Checking: ',
@@ -176,39 +170,15 @@ function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(
-                /*
-                Tiers.isTitleDesired(info)
-                    && Tiers.isLocationRelevant(info)
-                    && Tiers.isRelevantLocationDesired(info)
-                */
-                true
-            ) {
+            if(Tiers.isTitleRelevant(job.title) && Tiers.isLocationRelevant(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
-                ;(async(log) => {
-                    try {
-                        const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({
-                                chat_id: process.env.TELEGRAM_CHAT_ID,
-                                text: job.title + ' @ ' + company.name + '\n'
-                                    + Tiers.getJobLocations(job).join(' | ') + '\n'
-                                    + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`,
-                            })
-                        })
-                        if(!response.ok) throw new Error(`${response.status}: ${await response.text().catch(it => it)}`)
-                        const body = await response.json()
-                        if(!body.ok) {
-                            throw new Error(`Telegram error: ${body.description}`)
-                        }
-                        log.I('Sent successfully')
-                    }
-                    catch(err) {
-                        log.E('While sending notification: ', [err])
-                    }
-                })(log.addedCtx('job ', [job.id]))
+                U.sendMessage(
+                    log.addedCtx('job ', [job.id]),
+                    job.title + ' @ ' + company.name + '\n'
+                        + Tiers.getJobLocations(job).join(' | ') + '\n'
+                        + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
+                )
             }
         }
     }
