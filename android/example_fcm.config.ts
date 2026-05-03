@@ -11,4 +11,5 @@ export const ANDROID_PACKAGE = "com.myapp";
 export const GOOGLE_SERVICES_FILE = "./google-services.json";
 
 // Channel used for displaying notifications on Android 8+.
+// see /server/src/ashbyhq/run.ts
 export const ANDROID_NOTIFICATION_CHANNEL_ID = "default";

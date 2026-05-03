@@ -208,6 +208,13 @@ function checkCompany(
                             title: company.name + ': ' + job.title,
                             body: info.locations.join(' | '),
                         },
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                // see /android/fcm.config.ts ANDROID_NOTIFICATION_CHANNEL_ID
+                                channelId: 'default',
+                            }
+                        },
                         token: process.env.FCM_DEVICE_TOKEN!,
                     })
                     .then(response => {

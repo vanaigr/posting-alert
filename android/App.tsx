@@ -13,6 +13,16 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from "expo-notifications";
 import * as FCM from "./fcm.config.ts";
 
+if (Platform.OS === "android") {
+    Notifications.setNotificationChannelAsync(
+        FCM.ANDROID_NOTIFICATION_CHANNEL_ID,
+        {
+            name: "Default",
+            importance: Notifications.AndroidImportance.DEFAULT,
+        },
+    );
+}
+
 Notifications.setNotificationHandler({
     // there's no documentation in Expo of what those properties are
     handleNotification: async () => ({
@@ -210,16 +220,6 @@ function TokenBox() {
     R.useEffect(() => {
         (async () => {
             try {
-                if (Platform.OS === "android") {
-                    await Notifications.setNotificationChannelAsync(
-                        FCM.ANDROID_NOTIFICATION_CHANNEL_ID,
-                        {
-                            name: "Default",
-                            importance: Notifications.AndroidImportance.DEFAULT,
-                        },
-                    );
-                }
-
                 const existing = await Notifications.getPermissionsAsync();
                 let status = existing.status;
                 if (status !== "granted") {
