@@ -213,6 +213,7 @@ async function checkCompany(
 
 async function requestCompany(log: L.Log, connection: N.Connection, companyName: string) {
     try {
+        // https://github.com/plibither8/jobber/blob/4e079f745526a002463972d99fbbc9825ff0ce13/src/boards/lever.ts#L12
         const response = await N.fetch(connection, {
             method: 'GET',
             path: '/v0/postings/' + encodeURIComponent(companyName),
