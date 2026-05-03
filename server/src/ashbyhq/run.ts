@@ -2,7 +2,6 @@ import 'dotenv/config'
 import Database from 'better-sqlite3'
 import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import admin from 'firebase-admin'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -12,10 +11,6 @@ import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
 
 async function main() {
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault()
-    })
-
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
 
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
@@ -201,28 +196,29 @@ function checkCompany(
                 log.I('Job ', job.id, ' is relevant!')
                 relevant.push(job.id)
 
-                admin
-                    .messaging()
-                    .send({
-                        notification: {
-                            title: company.name + ': ' + job.title,
-                            body: info.locations.join(' | '),
-                        },
-                        android: {
-                            priority: 'high',
-                            notification: {
-                                // see /android/fcm.config.ts ANDROID_NOTIFICATION_CHANNEL_ID
-                                channelId: 'default',
-                            }
-                        },
-                        token: process.env.FCM_DEVICE_TOKEN!,
-                    })
-                    .then(response => {
-                        log.I('Successfully sent message: ', [response])
-                    })
-                    .catch(error => {
-                        log.E('While sending message: ', [error])
-                    })
+                ;(async(log) => {
+                    try {
+                        const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                chat_id: process.env.TELEGRAM_CHAT_ID,
+                                text: job.title + ' @ ' + company.name + '\n'
+                                    + info.locations.join(' | ') + '\n'
+                                    + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`,
+                            })
+                        })
+                        if(!response.ok) throw new Error(`${response.status}: ${response.text().catch(it => it)}`)
+                        const body = await response.json()
+                        if(!body.ok) {
+                            throw new Error(`Telegram error: ${body.description}`)
+                        }
+                        log.I('Sent successfully')
+                    }
+                    catch(err) {
+                        log.E('While sending notification: ', [err])
+                    }
+                })(log.addedCtx('job ', [job.id]))
             }
         }
     }
