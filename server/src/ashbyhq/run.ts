@@ -169,8 +169,6 @@ function checkCompany(
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
-        log.I('New job ', [job.id])
-
         toInsert.push({
             id: job.id,
             companyName: company.name,
@@ -190,32 +188,35 @@ function checkCompany(
             workplaceType: job.workplaceType,
         }
 
-        if(
-            /*
-            Tiers.isTitleDesired(info)
-                && Tiers.isLocationRelevant(info)
-                && Tiers.isRelevantLocationDesired(info)
-            */
-            true
-        ) {
-            log.I('Job ', job.id, ' is relevant!')
-            relevant.push(job.id)
+        if(!initial) {
+            log.I('New job ', [job.id])
+            if(
+                /*
+                Tiers.isTitleDesired(info)
+                    && Tiers.isLocationRelevant(info)
+                    && Tiers.isRelevantLocationDesired(info)
+                */
+                true
+            ) {
+                log.I('Job ', job.id, ' is relevant!')
+                relevant.push(job.id)
 
-            admin
-                .messaging()
-                .send({
-                    notification: {
-                        title: company.name + ': ' + job.title,
-                        body: info.locations.join(' | '),
-                    },
-                    token: process.env.FCM_DEVICE_TOKEN!,
-                })
-                .then(response => {
-                    log.I('Successfully sent message: ', [response])
-                })
-                .catch(error => {
-                    log.E('While sending message: ', [error])
-                })
+                admin
+                    .messaging()
+                    .send({
+                        notification: {
+                            title: company.name + ': ' + job.title,
+                            body: info.locations.join(' | '),
+                        },
+                        token: process.env.FCM_DEVICE_TOKEN!,
+                    })
+                    .then(response => {
+                        log.I('Successfully sent message: ', [response])
+                    })
+                    .catch(error => {
+                        log.E('While sending message: ', [error])
+                    })
+            }
         }
     }
 
