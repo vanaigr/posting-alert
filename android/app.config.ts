@@ -33,7 +33,15 @@ const config: ExpoConfig = {
   web: {
     favicon: "./assets/favicon.png",
   },
-  plugins: ["expo-notifications"],
+  plugins: [
+    "expo-notifications",
+    [
+      "expo-build-properties",
+      {
+        android: { usesCleartextTraffic: true },
+      },
+    ],
+  ],
 };
 
 export default config;
