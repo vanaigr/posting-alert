@@ -110,8 +110,10 @@ async function main() {
                     return
                 }
 
+                const currentTime = Date.now()
+
                 db.update(Db.company)
-                    .set({ checkedEpochMs: Date.now() })
+                    .set({ checkedEpochMs: currentTime })
                     .where(D.inArray(Db.company.name, companyNames))
                     .run()
 
@@ -120,7 +122,7 @@ async function main() {
                 for(let i = 0; i < companiesToCheck.length; i++) {
                     const company = companiesToCheck[i]
                     const log = mainLog.addedCtx(company.name)
-                    checkCompany(db, log, company, result.data[i])
+                    checkCompany(db, log, currentTime, company, result.data[i])
                 }
             }
             catch(err) {
@@ -138,6 +140,7 @@ async function main() {
 function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
+    currentTime: number,
     company: D.InferSelectModel<typeof Db.company>,
     jobBoard: ApiJobBoardWithTeams,
 ) {
@@ -174,6 +177,7 @@ function checkCompany(
                 team: jobBoard.teams.find(it => it.id === job.teamId) ?? null,
             }),
             longInfo: null,
+            fetchedEpochMs: currentTime,
         })
 
         const info = {

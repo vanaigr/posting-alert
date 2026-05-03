@@ -29,6 +29,7 @@ type Job = {
     jobTitle: string
     location: string
     url: string
+    currentTime: number | undefined
 }
 
 type JobsResult = { status: 'pending' } | { status: 'error', data: unknown } | { status: 'ok', data: Job[] }
@@ -47,25 +48,38 @@ function JobList() {
 
             const result: any[] = await response.json()
 
-            setJobsResult({
-                status: 'ok',
-                data: result.map(it => {
-                    const info = JSON.parse(it.shortInfo ?? '{}')?.job ?? {}
-                    return {
-                        id: it.id,
-                        companyName: it.companyName,
-                        jobTitle: info?.title,
-                        location: [
-                            info?.locationName
+            const jobs = result.map((it): Job => {
+                const info = JSON.parse(it.shortInfo ?? '{}')?.job ?? {}
+                return {
+                    id: it.id,
+                    companyName: it.companyName,
+                    jobTitle: info?.title,
+                    location: [
+                        info?.locationName
                             + (info?.workplaceType ? ', ' + info.workplaceType : ''),
-                            ...(info?.secondaryLocations ?? []).map((it: any) => {
-                                return it.locationName
-                            })
-                        ].join('; '),
-                        url: `https://jobs.ashbyhq.com/${encodeURIComponent(it.companyName)}/${encodeURIComponent(it.id)}`,
-                    }
-                }),
+                        ...(info?.secondaryLocations ?? []).map((it: any) => {
+                            return it.locationName
+                        })
+                    ].join('; '),
+                    url: `https://jobs.ashbyhq.com/${encodeURIComponent(it.companyName)}/${encodeURIComponent(it.id)}`,
+                    currentTime: it.fetchedEpochMs ?? undefined,
+                }
             })
+            jobs.sort((a, b) => {
+                let diff: number
+
+                if(a.currentTime === undefined || b.currentTime ===  undefined) {
+                    diff = (a.currentTime === undefined ? 0 : 1) - (b.currentTime === undefined ? 0 : 1)
+                    return diff
+                }
+
+                diff = a.currentTime - b.currentTime
+                if(diff !== 0) return diff
+
+                return 0
+            })
+
+            setJobsResult({ status: 'ok', data: jobs })
         })()
             .catch(err => {
                 setJobsResult({ status: 'error', data: err })
@@ -114,6 +128,14 @@ function JobList() {
                             <Text>{job.companyName}</Text>
                             <Text> | </Text>
                             <Text>{job.location}</Text>
+                        </View>
+                        <View style={{ display: 'flex', flexDirection: 'row' }}>
+                            <Text>
+                                {job.currentTime === undefined
+                                    ? 'Unknown ago'
+                                    : Math.max(999, (Date.now() - job.currentTime) / (1000 * 60)) + ' min ago'
+                                }
+                            </Text>
                         </View>
                     </TouchableOpacity>
                     <View>

@@ -21,6 +21,7 @@ export const job = sqliteTable('job', {
     toFetch: integer('to_fetch').notNull(),
     shortInfo: text('short_info'),
     longInfo: text('long_info'),
+    fetchedEpochMs: integer('fetched_epoch_ms'),
 })
 
 export const toReview = sqliteTable('to_review', {
@@ -68,6 +69,14 @@ export function migrate(db: BetterSQLite3Database) {
                 id TEXT PRIMARY KEY
             )`)
             tx.run(sql`PRAGMA user_version = 4`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 4) {
+            tx.run(sql`ALTER TABLE job ADD COLUMN fetched_epoch_ms INTEGER`)
+            tx.run(sql`PRAGMA user_version = 5`)
         }
     })
 }
