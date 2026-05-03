@@ -4,6 +4,7 @@ import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as H from 'hono'
 import { serve } from '@hono/node-server'
+import { cors } from 'hono/cors'
 
 import * as U from './lib/util.ts'
 import * as L from './lib/log.ts'
@@ -17,6 +18,12 @@ async function main() {
     Db.migrate(db)
 
     const app = new H.Hono()
+
+    app.use('*', cors({
+        origin: '*',
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+    }))
 
     if(!process.env.BEARER) {
         throw new Error('Missing bearer token')
