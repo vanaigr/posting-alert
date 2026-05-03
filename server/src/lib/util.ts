@@ -120,6 +120,9 @@ export async function sendMessage(log: L.Log, message: string) {
             body: JSON.stringify({
                 chat_id: process.env.TELEGRAM_CHAT_ID,
                 text: message,
+                link_preview_options: {
+                    is_disabled: true,
+                },
             })
         })
         if(!response.ok) throw new Error(`${response.status}: ${await response.text().catch(it => it)}`)
