@@ -18,22 +18,9 @@ export async function closeConnection(conn: Connection) {
     await conn.client.close().catch(() => {})
 }
 
-function ensureClient(conn: Connection): Pool {
-    if (conn.client.destroyed || conn.client.closed) {
-        conn.client = new Pool(conn.origin, conn.options)
-    }
-    return conn.client
-}
-
-export async function fetch(
+export function fetch(
     conn: Connection,
     options: Omit<Dispatcher.RequestOptions, 'origin' | 'opaque'>,
 ): Promise<Dispatcher.ResponseData> {
-    const client = ensureClient(conn)
-    try {
-        return await client.request({ ...options, origin: conn.origin })
-    } catch (err) {
-        conn.client.destroy(err as Error).catch(() => {})
-        throw err
-    }
+    return conn.client.request({ ...options, origin: conn.origin })
 }
