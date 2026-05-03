@@ -188,7 +188,7 @@ function checkCompany(
         }
 
         if(
-            Tiers.isTitleRelevant(info)
+            Tiers.isTitleDesired(info)
                 && Tiers.isLocationRelevant(info)
                 && Tiers.isRelevantLocationDesired(info)
         ) {

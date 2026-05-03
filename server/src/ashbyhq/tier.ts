@@ -104,6 +104,10 @@ export function isRelevantLocationDesired(job: Job) {
             || location.toLowerCase().includes('chicago')
             || isRemoteNationwide(location)
     })
+}
+export function isTitleDesired(job: Job) {
+    return titleRegex.test(job.title)
+        && !/\b(director|lead|manager|staff|qa)\b/i.test(job.title)
 
 }
 
