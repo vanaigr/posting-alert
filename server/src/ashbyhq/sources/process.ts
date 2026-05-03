@@ -16,6 +16,7 @@ gau --o gau-urls.txt jobs.ashbyhq.com
 
 const urls1: string[][] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'archive-urls.json')).toString())
 const urls2: string[] = fs.readFileSync(path.join(import.meta.dirname, 'gau-urls.txt')).toString().split('\n')
+const names3: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'thirdParty', 'ashby_companies.json')).toString())
 
 const httpPrefix = 'http://jobs.ashbyhq.com/'
 const httpsPrefix = 'https://jobs.ashbyhq.com/'
@@ -54,6 +55,9 @@ for(const [url, ...huh] of urls1) {
 }
 for(const url of urls2) {
     addUrl(url)
+}
+for(const name of names3) {
+    companies.add(name.toLowerCase())
 }
 
 console.log('Found', companies.size, 'companies')
