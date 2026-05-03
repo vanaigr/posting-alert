@@ -8,6 +8,7 @@ import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from './db.ts'
 import { populate } from './populate.ts'
+import * as Tiers from './tier.ts'
 
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
@@ -23,6 +24,14 @@ async function main() {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
+    let tiers: Tiers.Tiers = Tiers.calculateTiers(db)
+    mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
+    setInterval(() => {
+        mainLog.I('Updating company tiers')
+        tiers = Tiers.calculateTiers(db)
+        mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
+    }, 30 * 60 * 1000)
+
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
         rateLimit = false
@@ -30,19 +39,62 @@ async function main() {
         mainLog.I('Tick')
         const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
 
+        let desiredCount = 0
+        let relevantCount = 0
+        let otherCount = 0
+        // TODO: this is biased if e.g. there's 100500 desired and 5 relevant.
+        for(let i = 0; i < 5; i++) {
+            const v = Math.random()
+            if(v < 0.7) {
+                desiredCount++
+            }
+            else if(v < 0.9) {
+                relevantCount++
+            }
+            else {
+                otherCount++
+            }
+        }
+
         const companiesInProcessList = [...companiesInProcess]
 
-        const companiesToCheck = db.select().from(Db.company)
+        const desiredCompaniesToCheck = db.select().from(Db.company)
             .where(D.and(
                 D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
+                D.inArray(Db.company.name, tiers.desiredCompanies),
                 D.not(D.inArray(Db.company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(5)
+            .limit(desiredCount) // NOTE: may get less but unlikely
             .all()
-        mainLog.I('Checking ', [companiesToCheck.length], ' companies')
+        const relevantCompaniesToCheck = db.select().from(Db.company)
+            .where(D.and(
+                D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
+                D.inArray(Db.company.name, tiers.relevantCompanies),
+                D.not(D.inArray(Db.company.name, companiesInProcessList)),
+            ))
+            .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(relevantCount)
+            .all()
+        const otherCompaniesToCheck = db.select().from(Db.company)
+            .where(D.and(
+                D.or(D.eq(Db.company.exists, 1), D.isNull(Db.company.exists)),
+                D.not(D.inArray(Db.company.name, tiers.desiredCompanies)),
+                D.not(D.inArray(Db.company.name, tiers.relevantCompanies)),
+                D.not(D.inArray(Db.company.name, companiesInProcessList)),
+            ))
+            .orderBy(D.sql`${Db.company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(otherCount)
+            .all()
+
+        mainLog.I('Checking')
+        mainLog.I([desiredCompaniesToCheck.length], ' desired companies')
+        mainLog.I([relevantCompaniesToCheck.length], ' relevant companies')
+        mainLog.I([otherCompaniesToCheck.length], ' other companies')
 
         ;(async() => {
+            const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
+
             try {
                 const companyNames = companiesToCheck.map(it => it.name)
                 for(const it of companiesToCheck) companiesInProcess.add(it.name)
@@ -70,12 +122,7 @@ async function main() {
                 mainLog.E('While checking: ', [err])
             }
             finally {
-                for(const it of companiesToCheck) companiesInProcess.add(it.name)
-            }
-
-            for(const company of companiesToCheck) {
-
-                companiesInProcess.add(company.name)
+                for(const it of companiesToCheck) companiesInProcess.delete(it.name)
             }
         })()
 
@@ -122,6 +169,17 @@ function checkCompany(
             }),
             longInfo: null,
         })
+
+        const info = {
+            title: job.title,
+            locations: Tiers.getJobLocation(job),
+            workplaceType: job.workplaceType,
+        }
+
+        if(Tiers.isTitleRelevant(info)) {
+            log.I('Job is relevant!')
+            db.insert(Db.toReview).values({ id: job.id }).run()
+        }
     }
 
     db.transaction(db => {

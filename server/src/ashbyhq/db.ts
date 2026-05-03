@@ -23,6 +23,10 @@ export const job = sqliteTable('job', {
     longInfo: text('long_info'),
 })
 
+export const toReview = sqliteTable('to_review', {
+    id: text('id').primaryKey(),
+})
+
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
         const version = dbVersion(tx)
@@ -54,6 +58,16 @@ export function migrate(db: BetterSQLite3Database) {
             tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT`)
             tx.run(sql`ALTER TABLE job ADD COLUMN long_info TEXT`)
             tx.run(sql`PRAGMA user_version = 3`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 3) {
+            tx.run(sql`CREATE TABLE to_review (
+                id TEXT PRIMARY KEY
+            )`)
+            tx.run(sql`PRAGMA user_version = 4`)
         }
     })
 }

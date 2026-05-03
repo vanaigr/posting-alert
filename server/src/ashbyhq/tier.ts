@@ -3,6 +3,7 @@ import path from 'node:path'
 import util from 'node:util'
 import 'dotenv/config'
 import Database from 'better-sqlite3'
+import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from './db.ts'
@@ -27,8 +28,13 @@ type Job = {
     workplaceType: string
 }
 
-export function tier(db: BetterSQLite3Database) {
-    const jobsByCompany = new Map<string, Job[]>()
+export type Tiers = {
+    desiredCompanies: string[]
+    relevantCompanies: string[]
+}
+
+export function calculateTiers(db: BetterSQLite3Database) {
+    const relevantJobsByCompany = new Map<string, Job[]>()
 
     for(const job of db.select().from(Db.job).all()) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
@@ -40,27 +46,46 @@ export function tier(db: BetterSQLite3Database) {
         }
         if(!isTitleRelevant(info) || !isLocationRelevant(info)) continue
 
-        const jobs = (jobsByCompany.get(job.companyName) ?? [])
+        const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
         jobs.push(info)
-        jobsByCompany.set(job.companyName, jobs)
+        relevantJobsByCompany.set(job.companyName, jobs)
     }
 
     const desiredCompanies: string[] = []
+    const relevantCompanies: string[] = []
+    //const irrelevantCompanies: string[] = []
 
-    for(const [companyName, jobs] of jobsByCompany) {
-        const desired = jobs.find(it => isRelevantLocationDesired(it))
-        if(desired === undefined) continue
-        desiredCompanies.push(companyName)
+    const allCompanies = db.select().from(Db.company).where(D.eq(Db.company.exists, 1)).all()
+
+    for(const company of allCompanies) {
+        const relevantJobs = relevantJobsByCompany.get(company.name)
+        if(relevantJobs === undefined) {
+            //irrelevantCompanies.push(company.name)
+        }
+        else {
+            const desired = relevantJobs.find(it => isRelevantLocationDesired(it))
+            if(desired !== undefined) {
+                desiredCompanies.push(company.name)
+            }
+            else {
+                relevantCompanies.push(company.name)
+            }
+        }
     }
 
-    console.log(util.inspect(desiredCompanies, { maxArrayLength: Infinity }))
+    return {
+        desiredCompanies,
+        relevantCompanies,
+        //irrelevantCompanies,
+    }
+    //console.log(util.inspect(desiredCompanies, { maxArrayLength: Infinity }))
 }
 
 const titleRegex = /(engineer|developer|programmer)/i
-function isTitleRelevant(job: Job) {
+export function isTitleRelevant(job: Job) {
     return titleRegex.test(job.title)
 }
-function isLocationRelevant(job: Job) {
+export function isLocationRelevant(job: Job) {
     return job.locations.some(name => {
         return isRemoteNationwide(name)
             || stateCodesRegex.test(name)
@@ -73,7 +98,7 @@ function isRemoteNationwide(location: string) {
         || (/remote/i.test(location) && !otherCountriesRegex.test(location))
 }
 
-function isRelevantLocationDesired(job: Job) {
+export function isRelevantLocationDesired(job: Job) {
     return job.locations.some(location => {
         return location.includes('IL')
             || location.toLowerCase().includes('chicago')
@@ -82,7 +107,7 @@ function isRelevantLocationDesired(job: Job) {
 
 }
 
-function getJobLocation(job: any) {
+export function getJobLocation(job: any) {
     return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
 }
 
