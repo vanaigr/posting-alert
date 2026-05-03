@@ -1,7 +1,5 @@
-import 'dotenv/config'
-import Database from 'better-sqlite3'
 import * as D from 'drizzle-orm'
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -13,12 +11,7 @@ import * as N from '../lib/network.ts'
 
 const { aCompany: Company, aJob: Job } = Db
 
-async function main() {
-    const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
-
-    const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
-    Db.migrate(db)
-
+export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     populate(db)
     mainLog.I('Populated companies')
 
@@ -387,5 +380,3 @@ async function fetchGraphql<T extends {}>(connection: N.Connection, log: L.Log, 
         return U.status('error')
     }
 }
-
-await main()

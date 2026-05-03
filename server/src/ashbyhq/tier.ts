@@ -47,30 +47,20 @@ export function calculateTiers(db: BetterSQLite3Database) {
 
     const desiredCompanies: string[] = []
     const relevantCompanies: string[] = []
-    //const irrelevantCompanies: string[] = []
 
-    const allCompanies = db.select().from(Company).where(D.eq(Company.exists, 1)).all()
-
-    for(const company of allCompanies) {
-        const relevantJobs = relevantJobsByCompany.get(company.name)
-        if(relevantJobs === undefined) {
-            //irrelevantCompanies.push(company.name)
+    for(const [companyName, relevantJobs] of relevantJobsByCompany) {
+        const desired = relevantJobs.find(it => isTitleDesired(it.title) && isLocationDesired(it))
+        if(desired !== undefined) {
+            desiredCompanies.push(companyName)
         }
         else {
-            const desired = relevantJobs.find(it => isTitleDesired(it.title) && isLocationDesired(it))
-            if(desired !== undefined) {
-                desiredCompanies.push(company.name)
-            }
-            else {
-                relevantCompanies.push(company.name)
-            }
+            relevantCompanies.push(companyName)
         }
     }
 
     return {
         desiredCompanies,
         relevantCompanies,
-        //irrelevantCompanies,
     }
 }
 
