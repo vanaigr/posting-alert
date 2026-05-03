@@ -2,6 +2,7 @@ import 'dotenv/config'
 import Database from 'better-sqlite3'
 import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import admin from 'firebase-admin'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -11,6 +12,10 @@ import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
 
 async function main() {
+    admin.initializeApp({
+        credential: admin.credential.applicationDefault()
+    })
+
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
 
     const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
@@ -179,6 +184,22 @@ function checkCompany(
         if(Tiers.isTitleRelevant(info)) {
             log.I('Job is relevant!')
             db.insert(Db.toReview).values({ id: job.id }).run()
+
+            admin
+                .messaging()
+                .send({
+                    notification: {
+                        title: job.title + ' @ ' + company.name,
+                        body: Tiers.getJobLocation(info).join(' | '),
+                    },
+                    token: process.env.FCM_DEVICE_TOKEN!,
+                })
+                .then(response => {
+                    log.I('Successfully sent message: ', [response])
+                })
+                .catch(error => {
+                    log.E('While sending message: ', [error])
+                })
         }
     }
 

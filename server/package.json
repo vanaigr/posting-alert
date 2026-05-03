@@ -9,6 +9,7 @@
         "better-sqlite3": "^12.9.0",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
+        "firebase-admin": "^13.8.0",
         "temporal-polyfill": "^0.3.2"
     }
 }
