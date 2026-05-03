@@ -22,6 +22,7 @@ async function main() {
     Db.migrate(db)
 
     populate(db)
+    mainLog.I('Populated companies')
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false
@@ -89,10 +90,12 @@ async function main() {
             .limit(otherCount)
             .all()
 
-        mainLog.I('Checking')
-        mainLog.I([desiredCompaniesToCheck.length], ' desired companies')
-        mainLog.I([relevantCompaniesToCheck.length], ' relevant companies')
-        mainLog.I([otherCompaniesToCheck.length], ' other companies')
+        mainLog.I(
+            'Checking: ',
+            [desiredCompaniesToCheck.length], ', ',
+            [relevantCompaniesToCheck.length], ', ',
+            [otherCompaniesToCheck.length], ', ',
+        )
 
         ;(async() => {
             const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
