@@ -211,7 +211,7 @@ function checkCompany(
                                     + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`,
                             })
                         })
-                        if(!response.ok) throw new Error(`${response.status}: ${response.text().catch(it => it)}`)
+                        if(!response.ok) throw new Error(`${response.status}: ${await response.text().catch(it => it)}`)
                         const body = await response.json()
                         if(!body.ok) {
                             throw new Error(`Telegram error: ${body.description}`)
