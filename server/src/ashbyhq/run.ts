@@ -180,13 +180,6 @@ function checkCompany(
             fetchedEpochMs: currentTime,
         })
 
-        const info = {
-            id: job.id,
-            title: job.title,
-            locations: Tiers.getJobLocation(job),
-            workplaceType: job.workplaceType,
-        }
-
         if(!initial) {
             log.I('New job ', [job.id])
             if(
@@ -207,7 +200,7 @@ function checkCompany(
                             body: JSON.stringify({
                                 chat_id: process.env.TELEGRAM_CHAT_ID,
                                 text: job.title + ' @ ' + company.name + '\n'
-                                    + info.locations.join(' | ') + '\n'
+                                    + Tiers.getJobLocations(job).join(' | ') + '\n'
                                     + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`,
                             })
                         })

@@ -75,3 +75,9 @@ export function getHash(...fields: unknown[]) {
   }
   return result;
 }
+
+export function regexEscape(str: string) {
+    // @ts-ignore
+    return RegExp.escape(str)
+}
+

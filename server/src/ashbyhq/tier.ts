@@ -7,6 +7,7 @@ import * as D from 'drizzle-orm'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from '../lib/db.ts'
+import * as U from '../lib/util.ts'
 
 const { aCompany: Company, aJob: Job } = Db
 
@@ -17,18 +18,14 @@ const otherCountries: string[] = JSON.parse(fs.readFileSync(path.join(import.met
 
 const citiesStatesRegex = new RegExp(
     '('
-        + [...cities, ...states].map(regexEscape).join('|')
+        + [...cities, ...states].map(U.regexEscape).join('|')
     + ')',
     'i'
 )
-const stateCodesRegex = new RegExp('(' + stateCodes.map(regexEscape).join('|') + ')')
-const otherCountriesRegex = new RegExp('(' + [...otherCountries, 'europe', 'latam', 'south america', 'africa', 'asia'].map(regexEscape).join('|') + ')', 'i')
+const stateCodesRegex = new RegExp('(' + stateCodes.map(U.regexEscape).join('|') + ')')
 
-type Job = {
-    title: string
-    locations: string[]
-    workplaceType: string
-}
+const otherCountriesRegex1 = new RegExp('(' + [...otherCountries, 'europe',  'south america', 'africa', 'asia'].map(U.regexEscape).join('|') + ')', 'i')
+const otherCountriesRegex2 = new RegExp('(MEA|LATAM|APAC|MENA)')
 
 export type Tiers = {
     desiredCompanies: string[]
@@ -36,20 +33,15 @@ export type Tiers = {
 }
 
 export function calculateTiers(db: BetterSQLite3Database) {
-    const relevantJobsByCompany = new Map<string, Job[]>()
+    const relevantJobsByCompany = new Map<string, any[]>()
 
     for(const job of db.select().from(Job).all()) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
         if(!infoRaw) continue
-        const info: Job = {
-            title: infoRaw.title,
-            locations: getJobLocation(infoRaw),
-            workplaceType: infoRaw.workplaceType,
-        }
-        if(!isTitleRelevant(info) || !isLocationRelevant(info)) continue
+        if(!isTitleRelevant(infoRaw.title) || !isLocationRelevant(infoRaw)) continue
 
         const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
-        jobs.push(info)
+        jobs.push(infoRaw)
         relevantJobsByCompany.set(job.companyName, jobs)
     }
 
@@ -65,7 +57,7 @@ export function calculateTiers(db: BetterSQLite3Database) {
             //irrelevantCompanies.push(company.name)
         }
         else {
-            const desired = relevantJobs.find(it => isRelevantLocationDesired(it))
+            const desired = relevantJobs.find(it => isTitleDesired(it.title) && isLocationDesired(it))
             if(desired !== undefined) {
                 desiredCompanies.push(company.name)
             }
@@ -83,43 +75,37 @@ export function calculateTiers(db: BetterSQLite3Database) {
 }
 
 const titleRegex = /(engineer|developer|programmer)/i
-export function isTitleRelevant(job: Job) {
-    return titleRegex.test(job.title)
+export function isTitleRelevant(title: string) {
+    return titleRegex.test(title)
 }
-export function isLocationRelevant(job: Job) {
-    return job.locations.some(name => {
-        return isRemoteNationwide(name)
-            || stateCodesRegex.test(name)
-            || citiesStatesRegex.test(name)
-    })
-}
-function isRemoteNationwide(location: string) {
-    const hasUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
-    const hasConcreteLocation = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
-
-    return (hasUs && !hasConcreteLocation) || (/(remote|nationwide)/i.test(location) && !otherCountriesRegex.test(location))
+export function isTitleDesired(title: string) {
+    return isTitleRelevant(title)
+        && !/\b(director|lead|manager|staff|qa)\b/i.test(title)
 }
 
-export function isRelevantLocationDesired(job: Job) {
-    return job.locations.some(location => {
-        return location.includes('IL')
-            || /(illinois|chicago)/i.test(location)
-            || isRemoteNationwide(location)
-    })
-}
-export function isTitleDesired(job: Job) {
-    return titleRegex.test(job.title)
-        && !/\b(director|lead|manager|staff|qa)\b/i.test(job.title)
-
-}
-
-export function getJobLocation(job: any) {
+export function getJobLocations(job: any) {
     return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
 }
+function isLocationRelevant(job: any) {
+    return getJobLocations(job).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+        const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || job.workplaceType === 'Remote'
+        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
 
-function regexEscape(str: string) {
-    // @ts-ignore
-    return RegExp.escape(str)
+        return mentionsUs || mentionsUsConcrete || isRemoteInUs
+    })
+}
+function isLocationDesired(job: any) {
+    return getJobLocations(job).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+        const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || job.workplaceType === 'Remote'
+        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+
+        return isRemoteInUs || isMyLocal
+    })
 }
 
 if(import.meta.main) {
