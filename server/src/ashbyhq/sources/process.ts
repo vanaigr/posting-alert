@@ -10,7 +10,7 @@ curl -G 'https://web.archive.org/cdx/search/cdx' \
     --data-urlencode 'collapse=urlkey' \
     > archive-urls.json
 
-gau --o gau_urls.txt jobs.ashbyhq.com
+gau --o gau-urls.txt jobs.ashbyhq.com
 
 */
 
