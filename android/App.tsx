@@ -86,7 +86,7 @@ function JobList() {
                 }
 
                 diff = a.currentTime - b.currentTime
-                if(diff !== 0) return -diff
+                if(diff !== 0) return diff
 
                 return 0
             })
