@@ -1,9 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const OUTPUT = path.join(import.meta.dirname, 'archive-urls.txt')
-const STATE = path.join(import.meta.dirname, 'archive-urls.state.json')
-const MATCH = 'jobs.lever.co/*'
+const args = process.argv.slice(2)
+const baseDir = path.resolve(args[0])
+const url = args[1]
+
+const OUTPUT = path.join(baseDir, 'archive-urls.txt')
+const STATE = path.join( baseDir, 'archive-urls.state.json')
+const MATCH = url//'jobs.lever.co/*'
 const BATCH_LIMIT = 50000
 const MAX_RETRIES = 20
 const BASE_DELAY_MS = 2000
