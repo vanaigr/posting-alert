@@ -162,6 +162,7 @@ function checkCompany(
     )
 
     const toInsert: D.InferSelectModel<typeof Db.job>[] = []
+    const relevant: string[] = []
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
         toInsert.push({
@@ -176,21 +177,26 @@ function checkCompany(
         })
 
         const info = {
+            id: job.id,
             title: job.title,
             locations: Tiers.getJobLocation(job),
             workplaceType: job.workplaceType,
         }
 
-        if(Tiers.isTitleRelevant(info)) {
-            log.I('Job is relevant!')
-            db.insert(Db.toReview).values({ id: job.id }).run()
+        if(
+            Tiers.isTitleRelevant(info)
+                && Tiers.isLocationRelevant(info)
+                && Tiers.isRelevantLocationDesired(info)
+        ) {
+            log.I('Job ', job.id, ' is relevant!')
+            relevant.push(job.id)
 
             admin
                 .messaging()
                 .send({
                     notification: {
-                        title: job.title + ' @ ' + company.name,
-                        body: Tiers.getJobLocation(info).join(' | '),
+                        title: company.name + ': ' + job.title,
+                        body: info.locations.join(' | '),
                     },
                     token: process.env.FCM_DEVICE_TOKEN!,
                 })
@@ -208,7 +214,12 @@ function checkCompany(
             .set({ exists: 1 })
             .where(D.eq(Db.company.name, company.name))
             .run()
-        if(toInsert.length > 0) db.insert(Db.job).values(toInsert).run()
+        if(toInsert.length > 0) {
+            db.insert(Db.job).values(toInsert).run()
+        }
+        if(relevant.length > 0) {
+            db.insert(Db.toReview).values(relevant.map(it => ({ id: it }))).run()
+        }
     })
 
     if(initial) {
