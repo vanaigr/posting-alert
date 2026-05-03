@@ -93,9 +93,10 @@ export function isLocationRelevant(job: Job) {
     })
 }
 function isRemoteNationwide(location: string) {
-    return location.includes('US')
-        || /(united states|u\. ?s\.|nationwide)/i.test(location)
-        || (/remote/i.test(location) && !otherCountriesRegex.test(location))
+    const hasUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+    const hasConcreteLocation = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+
+    return (hasUs && !hasConcreteLocation) || (/(remote|nationwide)/i.test(location) && !otherCountriesRegex.test(location))
 }
 
 export function isRelevantLocationDesired(job: Job) {
