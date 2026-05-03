@@ -50,10 +50,10 @@ async function main() {
         // TODO: this is biased if e.g. there's 100500 desired and 5 relevant.
         for(let i = 0; i < 5; i++) {
             const v = Math.random()
-            if(v < 0.7) {
+            if(v < 0.5) {
                 desiredCount++
             }
-            else if(v < 0.9) {
+            else if(v < 0.75) {
                 relevantCount++
             }
             else {

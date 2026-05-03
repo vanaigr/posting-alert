@@ -11,7 +11,7 @@ import * as L from './lib/log.ts'
 import * as T from './lib/temporal.ts'
 import * as Db from './ashbyhq/db.ts'
 
-import * as Tiers from './tier.ts'
+import * as Tiers from './ashbyhq/tier.ts'
 
 async function main() {
     const mainLog = L.makeLogger(process.env.SERVE_LOG_PATH || undefined, undefined)
