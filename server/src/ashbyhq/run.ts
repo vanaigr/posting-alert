@@ -9,6 +9,7 @@ import * as T from '../lib/temporal.ts'
 import * as Db from './db.ts'
 import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
+import * as N from '../lib/network.ts'
 
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
@@ -29,6 +30,8 @@ async function main() {
         tiers = Tiers.calculateTiers(db)
         mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
     }, 30 * 60 * 1000)
+
+    const connection = N.createConnection('https://jobs.ashbyhq.com')
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -99,7 +102,7 @@ async function main() {
                 const companyNames = companiesToCheck.map(it => it.name)
                 for(const it of companiesToCheck) companiesInProcess.add(it.name)
 
-                const result = await getCompaniesDetails(mainLog, companyNames)
+                const result = await getCompaniesDetails(connection, mainLog, companyNames)
                 if(result.status === 'rate-limit') {
                     rateLimit = true
                     return
@@ -244,7 +247,7 @@ function checkCompany(
     }
 }
 
-async function getCompaniesDetails(log: L.Log, companies: string[]) {
+async function getCompaniesDetails(connection: N.Connection, log: L.Log, companies: string[]) {
     const companiesEncoded = companies.map((_, i) => encodeIndex(i))
     const header = 'query ApiJobBoardWithTeams('
         + companiesEncoded.map(it => '$' + it + ': String!').join(', ')
@@ -300,11 +303,15 @@ fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
     //console.log(graphql)
     //return U.status('error')
 
-    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams>>(log, {
-        operationName: 'ApiJobBoardWithTeams',
-        variables: Object.fromEntries(companiesEncoded.map((encoded, i) => [encoded, companies[i]])),
-        query: graphql,
-    })
+    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams>>(
+        connection,
+        log,
+        {
+            operationName: 'ApiJobBoardWithTeams',
+            variables: Object.fromEntries(companiesEncoded.map((encoded, i) => [encoded, companies[i]])),
+            query: graphql,
+        }
+    )
     if(responseStatus.status !== 'ok') return responseStatus
 
     return U.result(
@@ -344,31 +351,32 @@ type ApiJobBoardWithTeams = null | {
     }[]
 }
 
-async function fetchGraphql<T extends {}>(log: L.Log, body: any) {
+async function fetchGraphql<T extends {}>(connection: N.Connection, log: L.Log, body: any) {
     type GraphqlWrapper = {
         data?: T
         errors?: { message: string }[]
     }
 
     try {
-        const response = await fetch('https://jobs.ashbyhq.com/api/non-user-graphql', {
+        const response = await N.fetch(connection, {
+            path: '/api/non-user-graphql',
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
             },
             body: JSON.stringify(body)
         })
-        if(response.status === 429) {
+        if(response.statusCode === 429) {
             log.E('Rate limited')
-            await response.text().catch(() => {})
+            await response.body.text().catch(() => {})
             return U.status('rate-limit')
         }
-        if(!response.ok) {
+        if(response.statusCode !== 200) {
             log.E(
                 'Request failed (soft): ',
-                [response.status],
+                [response.statusCode],
                 ' with ',
-                ...await response.text().then(
+                ...await response.body.text().then(
                     (it): L.Message => ['body ', [it]],
                     (err): L.Message => ['body error ', [err]],
                 ),
@@ -376,7 +384,7 @@ async function fetchGraphql<T extends {}>(log: L.Log, body: any) {
             return U.status('error')
         }
 
-        const json: GraphqlWrapper = await response.json()
+        const json = await response.body.json() as GraphqlWrapper
         if(json.data === undefined) {
             log.E('Query failed: ', [json])
             return U.status('error')
