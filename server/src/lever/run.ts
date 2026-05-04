@@ -313,10 +313,10 @@ function calculateTiers(db: BetterSQLite3Database) {
 
 function isLocationRelevant(info: JobInfo) {
     return getLocations(info).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null
         const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
-        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'Remote'
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
@@ -325,10 +325,10 @@ function isLocationRelevant(info: JobInfo) {
 // NOTE: assumes info.descriptionPlain exists
 function isLocationDesired(info: JobInfo) {
     return getLocations(info).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null
         const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
-        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'Remote'
             || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)

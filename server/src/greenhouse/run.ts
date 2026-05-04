@@ -253,16 +253,17 @@ type Job = {
     offices?: { id: number; name: string; location: string; parent_id: number | null; child_ids: number[] }[]
 }
 
-function isLocationRelevant(job: { location: { name: string } }) {
+function isLocationRelevant(job: { location: { name: string }, content?: string }) {
     const location = job.location.name
+    const content = job.content
     if(!location) {
         console.log('missing location for', job)
         return true
     }
 
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
     const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
-    const isRemote = /(remote|nationwide)/i.test(location)
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
     return mentionsUs || mentionsUsConcrete || isRemoteInUs
@@ -281,9 +282,9 @@ function isLocationDesired(job: { location: { name: string }, content?: string }
         console.log('Missing content for', job)
     }
 
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
     const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
-    const isRemote = /(remote|nationwide)/i.test(location) || (content && /remote/i.test(content))
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
