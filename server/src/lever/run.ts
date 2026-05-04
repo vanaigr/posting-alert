@@ -9,7 +9,7 @@ import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as N from '../lib/network.ts'
-import { isTitleRelevant, isTitleDesired } from '../ashbyhq/tier.ts'
+import * as AshbyTiers from '../ashbyhq/tier.ts'
 
 const { lCompany: Company, lJob: Job } = Db
 
@@ -177,7 +177,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(isTitleRelevant(job.text) && isLocationRelevant(job)) {
+            if(AshbyTiers.isTitleRelevant(job.text) && isLocationRelevant(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
                 U.sendMessage(
@@ -280,7 +280,7 @@ function calculateTiers(db: BetterSQLite3Database) {
     for(const job of db.select().from(Job).all()) {
         const info: JobInfo | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
-        if(!isTitleRelevant(info.text) || !isLocationRelevant(info)) continue
+        if(!AshbyTiers.isTitleRelevant(info.text) || !isLocationRelevant(info)) continue
 
         const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
         jobs.push({ ...job, info })
@@ -292,7 +292,7 @@ function calculateTiers(db: BetterSQLite3Database) {
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
         const desired = relevantJobs.find(it => {
-            return isTitleDesired(it.info.text) && isLocationDesired(it.info)
+            return AshbyTiers.isTitleDesired(it.info.text) && isLocationDesired(it.info)
         })
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
@@ -309,16 +309,33 @@ function calculateTiers(db: BetterSQLite3Database) {
 }
 
 function isLocationRelevant(info: JobInfo) {
-    return info.country === 'US'
+    return getLocations(info).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+            || info.country === 'US' || info.country === null
+        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
+        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(AshbyTiers.otherCountriesRegex1.test(location) || AshbyTiers.otherCountriesRegex2.test(location))))
+
+        return mentionsUs || mentionsUsConcrete || isRemoteInUs
+    })
 }
 function isLocationDesired(info: JobInfo) {
-    return info.categories.allLocations.some(location => {
-        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'remote'
-        const isRemoteInUs = (isRemote && info.country === 'US')
+    return getLocations(info).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+            || info.country === 'US' || info.country === null
+        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
+        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(AshbyTiers.otherCountriesRegex1.test(location) || AshbyTiers.otherCountriesRegex2.test(location))))
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
         return isRemoteInUs || isMyLocal
     })
+}
+function getLocations(info: JobInfo) {
+    return [
+        ...(info.categories.location ? [info.categories.location] : []),
+        ...(info.categories.allLocations ?? []),
+    ]
 }
 
 type Job = {
@@ -337,7 +354,7 @@ type JobInfo = {
         location: string
         team: string
     }
-    country: string // 2 letter country code
+    country: string | null // 2 letter country code, or multiple
     createdAt: number // epoch ms
     hostedUrl: string
     text: string // title
