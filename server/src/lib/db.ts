@@ -37,6 +37,19 @@ export const lJob = sqliteTable('lever_job', {
     info: text('info'),
 })
 
+export const gCompany = sqliteTable('greenhouse_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+})
+
+export const gJob = sqliteTable('greenhouse_job', {
+    id: text('id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+    info: text('info').notNull(),
+})
+
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
         const version = dbVersion(tx)
@@ -114,6 +127,24 @@ export function migrate(db: BetterSQLite3Database) {
                 info TEXT
             )`)
             tx.run(sql`PRAGMA user_version = 7`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 7) {
+            tx.run(sql`CREATE TABLE greenhouse_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER
+            )`)
+            tx.run(sql`CREATE TABLE greenhouse_job (
+                id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 8`)
         }
     })
 }

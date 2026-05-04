@@ -16,16 +16,16 @@ const states: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirnam
 const stateCodes: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'stateCodes.json')).toString())
 const otherCountries: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'countries.json')).toString())
 
-const citiesStatesRegex = new RegExp(
+export const citiesStatesRegex = new RegExp(
     '('
         + [...cities, ...states].map(U.regexEscape).join('|')
     + ')',
     'i'
 )
-const stateCodesRegex = new RegExp('(' + stateCodes.map(U.regexEscape).join('|') + ')')
+export const stateCodesRegex = new RegExp('(' + stateCodes.map(U.regexEscape).join('|') + ')')
 
-const otherCountriesRegex1 = new RegExp('(' + [...otherCountries, 'europe',  'south america', 'africa', 'asia'].map(U.regexEscape).join('|') + ')', 'i')
-const otherCountriesRegex2 = new RegExp('(MEA|LATAM|APAC|MENA)')
+export const otherCountriesRegex1 = new RegExp('(' + [...otherCountries, 'europe',  'south america', 'africa', 'asia'].map(U.regexEscape).join('|') + ')', 'i')
+export const otherCountriesRegex2 = new RegExp('(MEA|LATAM|APAC|MENA)')
 
 export type Tiers = {
     desiredCompanies: string[]
