@@ -58,6 +58,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
             .all()
+        /*
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
@@ -67,11 +68,12 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
             .all()
+            */
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
                 D.not(D.inArray(Company.name, tiers.desiredCompanies)),
-                D.not(D.inArray(Company.name, tiers.relevantCompanies)),
+                //D.not(D.inArray(Company.name, tiers.relevantCompanies)),
                 D.not(D.inArray(Company.name, companiesInProcessList)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
@@ -79,22 +81,22 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .all()
 
         const tiersCounts = U.selectCompanies(
-            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
-            [0.5, 0.25, 0.25],
+            [desiredCompaniesToCheck/*, relevantCompaniesToCheck*/, otherCompaniesToCheck],
+            [0.5/*, 0.25*/, 0.25],
             quota,
         )
         desiredCompaniesToCheck.length = tiersCounts[0]
-        relevantCompaniesToCheck.length = tiersCounts[1]
-        otherCompaniesToCheck.length = tiersCounts[2]
+        //relevantCompaniesToCheck.length = tiersCounts[1]
+        otherCompaniesToCheck.length = tiersCounts[1/*!*/]
 
         mainLog.I(
             'Checking: ',
             [desiredCompaniesToCheck.length], ', ',
-            [relevantCompaniesToCheck.length], ', ',
+            //[relevantCompaniesToCheck.length], ', ',
             [otherCompaniesToCheck.length], ', ',
         )
 
-        const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
+        const companiesToCheck = [...desiredCompaniesToCheck/*, ...relevantCompaniesToCheck*/, ...otherCompaniesToCheck]
         const currentTime = Date.now()
 
         for(const company of companiesToCheck) {
@@ -283,6 +285,8 @@ function calculateTiers(db: BetterSQLite3Database): Tiers {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
+        desiredCompanies.push(companyName)
+        /*
         const desired = relevantJobs.find(it => {
             return AshbyTiers.isTitleDesired(it.title) && isLocationDesired(it)
         })
@@ -292,6 +296,7 @@ function calculateTiers(db: BetterSQLite3Database): Tiers {
         else {
             relevantCompanies.push(companyName)
         }
+        */
     }
 
     return {
