@@ -147,6 +147,19 @@ export function migrate(db: BetterSQLite3Database) {
             tx.run(sql`PRAGMA user_version = 8`)
         }
     })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 8) {
+            tx.run(sql`CREATE INDEX ashbyhq_job_company_name_idx ON ashbyhq_job(company_name)`)
+            tx.run(sql`CREATE INDEX lever_job_company_name_idx ON lever_job(company_name)`)
+            tx.run(sql`CREATE INDEX greenhouse_job_company_name_idx ON greenhouse_job(company_name)`)
+            tx.run(sql`CREATE INDEX ashbyhq_company_exists_checked_idx ON ashbyhq_company("exists", checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX lever_company_exists_checked_idx ON lever_company("exists", checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_exists_checked_idx ON greenhouse_company("exists", checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 9`)
+        }
+    })
 }
 
 
