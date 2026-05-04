@@ -44,7 +44,7 @@ export function calculateTiers(db: BetterSQLite3Database) {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => isTitleRelevant(it.title))
+        const desired = relevantJobs.find(it => isJobRelevant(it.title))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
@@ -60,20 +60,29 @@ export function calculateTiers(db: BetterSQLite3Database) {
 }
 
 const titleRegex = /(engineer|developer|programmer)/i
-export function isTitleRelevant(title: string) {
+export function isJobRelevant(title: string) {
     return titleRegex.test(title)
         && !(
             /(site reliability engineer|sales engineer|solution engineer)/i.test(title)
         )
 }
-export function isTitleDesired(title: string) {
-    return isTitleRelevant(title)
-        && !/\b(director|lead|manager|staff|supervisor|principal|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
+export function isJobDesired(title: string, description: string | undefined) {
+    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
+
+    if(description) {
+        const descriptionDesired = /(typescript|type script|reactjs|nodejs)/i.test(description)
+            || /(Node|React)/.test(description)
+        return descriptionDesired && !ignoreTitle
+    }
+
+    return isJobRelevant(title) && !ignoreTitle
 }
 
 export function getJobLocations(job: any) {
     return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
 }
+// Unfortunately ashbyhq does not give a way to get job description in 1 request with job list (and I don't want to half our throughput),
+// so we don't have the JD, and have to be more lenient.
 export function isLocationRelevant(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
@@ -84,6 +93,7 @@ export function isLocationRelevant(job: any) {
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
     })
 }
+
 /*
 export function isLocationDesired(job: any) {
     return getJobLocations(job).some(location => {

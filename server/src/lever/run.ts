@@ -174,12 +174,13 @@ async function checkCompany(
                 hostedUrl: job.hostedUrl,
                 text: job.text,
                 workplaceType: job.workplaceType,
+                descriptionPlain: job.descriptionPlain,
             } satisfies JobInfo),
         })
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(AshbyTiers.isTitleDesired(job.text) && isLocationRelevant(job)) {
+            if(AshbyTiers.isJobDesired(job.text, job.descriptionPlain) && isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
                 const ago = U.millisecToDurationString(Date.now() - (job.createdAt || 0))
@@ -295,7 +296,7 @@ function calculateTiers(db: BetterSQLite3Database) {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => AshbyTiers.isTitleRelevant(it.info.text))
+        const desired = relevantJobs.find(it => AshbyTiers.isJobRelevant(it.info.text))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
@@ -319,6 +320,20 @@ function isLocationRelevant(info: JobInfo) {
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
+    })
+}
+// NOTE: assumes info.descriptionPlain exists
+function isLocationDesired(info: JobInfo) {
+    return getLocations(info).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+            || info.country === 'US' || info.country === null
+        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
+            || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+
+        return isRemoteInUs || isMyLocal
     })
 }
 
@@ -345,6 +360,7 @@ type JobInfo = {
         location: string
         team: string
     }
+    descriptionPlain?: string
     country: string | null // 2 letter country code, or multiple
     createdAt: number // epoch ms
     hostedUrl: string

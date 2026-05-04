@@ -172,7 +172,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [id])
-            if(AshbyTiers.isTitleDesired(job.title) && isLocationRelevant(job)) {
+            if(AshbyTiers.isJobDesired(job.title, job.content) && isLocationDesired(job)) {
                 log.I('Job ', id, ' is relevant!')
 
                 const ago = U.millisecToDurationString(Date.now() - (new Date(job.updated_at).getTime() || 0))
@@ -212,7 +212,7 @@ async function requestCompany(log: L.Log, connection: N.Connection, companyName:
         // https://github.com/grnhse/greenhouse-api-docs/blob/2e9f2d8a573a6843c838cd5f4050f57f23f0494d/source/includes/job-board/_jobs.md?plain=1#L1
         const response = await N.fetch(connection, {
             method: 'GET',
-            path: '/v1/boards/' + encodeURIComponent(companyName) + '/jobs',
+            path: '/v1/boards/' + encodeURIComponent(companyName) + '/jobs?content=true',
         })
         if(response.statusCode === 429) {
             log.E('Rate limited')
@@ -248,7 +248,7 @@ type Job = {
     absolute_url: string
     language?: string
     metadata: unknown
-    content?: string
+    content?: string // html
     departments?: { id: number; name: string; parent_id: number | null; child_ids: number[] }[]
     offices?: { id: number; name: string; location: string; parent_id: number | null; child_ids: number[] }[]
 }
@@ -266,6 +266,28 @@ function isLocationRelevant(job: { location: { name: string } }) {
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
     return mentionsUs || mentionsUsConcrete || isRemoteInUs
+}
+
+function isLocationDesired(job: { location: { name: string }, content?: string }) {
+    const location = job.location.name
+    const content = job.content
+    if(!location) {
+        console.log('missing location for', job)
+        return true
+    }
+    if(!content) {
+        // This is not supposed to happen because this is only used for new jobs,
+        // and all new jobs are fetched with content.
+        console.log('Missing content for', job)
+    }
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+    const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+    const isRemote = /(remote|nationwide)/i.test(location) || (content && /remote/i.test(content))
+    const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+
+    return isRemoteInUs || isMyLocal
 }
 
 type Tiers = {
@@ -289,7 +311,7 @@ function calculateTiers(db: BetterSQLite3Database): Tiers {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => AshbyTiers.isTitleRelevant(it.title))
+        const desired = relevantJobs.find(it => AshbyTiers.isJobRelevant(it.title))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
