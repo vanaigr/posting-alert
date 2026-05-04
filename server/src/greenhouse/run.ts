@@ -58,7 +58,6 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
             .all()
-        /*
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
@@ -68,7 +67,6 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
             .all()
-            */
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
@@ -81,22 +79,22 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .all()
 
         const tiersCounts = U.selectCompanies(
-            [desiredCompaniesToCheck/*, relevantCompaniesToCheck*/, otherCompaniesToCheck],
-            [0.5/*, 0.25*/, 0.25],
+            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
+            [0.5, 0.25, 0.25],
             quota,
         )
         desiredCompaniesToCheck.length = tiersCounts[0]
-        //relevantCompaniesToCheck.length = tiersCounts[1]
-        otherCompaniesToCheck.length = tiersCounts[1/*!*/]
+        relevantCompaniesToCheck.length = tiersCounts[1]
+        otherCompaniesToCheck.length = tiersCounts[2]
 
         mainLog.I(
             'Checking: ',
             [desiredCompaniesToCheck.length], ', ',
-            //[relevantCompaniesToCheck.length], ', ',
+            [relevantCompaniesToCheck.length], ', ',
             [otherCompaniesToCheck.length], ', ',
         )
 
-        const companiesToCheck = [...desiredCompaniesToCheck/*, ...relevantCompaniesToCheck*/, ...otherCompaniesToCheck]
+        const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
         const currentTime = Date.now()
 
         for(const company of companiesToCheck) {
@@ -253,15 +251,12 @@ type Job = {
 function isLocationRelevant(job: { location: { name: string } }) {
     const location = job.location.name
 
-    // There is only one location string, so we can't filter jobs easily. Also no workplaceType
     const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
     const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
     const isRemote = /(remote|nationwide)/i.test(location)
+    const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
-    return mentionsUs || mentionsUsConcrete || isRemote
-}
-function isLocationDesired(job: { location: { name: string } }) {
-    return isLocationRelevant(job)
+    return mentionsUs || mentionsUsConcrete || isRemoteInUs
 }
 
 type Tiers = {
@@ -274,7 +269,7 @@ function calculateTiers(db: BetterSQLite3Database): Tiers {
     for(const job of db.select().from(Job).all()) {
         const info: Job | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
-        if(!AshbyTiers.isTitleRelevant(info.title) || !isLocationRelevant(info)) continue
+        if(!isLocationRelevant(info)) continue
 
         const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
         jobs.push(info)
@@ -285,18 +280,13 @@ function calculateTiers(db: BetterSQLite3Database): Tiers {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        desiredCompanies.push(companyName)
-        /*
-        const desired = relevantJobs.find(it => {
-            return AshbyTiers.isTitleDesired(it.title) && isLocationDesired(it)
-        })
+        const desired = relevantJobs.find(it => AshbyTiers.isTitleRelevant(it.title))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
         else {
             relevantCompanies.push(companyName)
         }
-        */
     }
 
     return {

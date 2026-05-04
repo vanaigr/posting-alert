@@ -2,9 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import util from 'node:util'
 import 'dotenv/config'
-import Database from 'better-sqlite3'
 import * as D from 'drizzle-orm'
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from '../lib/db.ts'
 import * as U from '../lib/util.ts'
@@ -38,7 +37,7 @@ export function calculateTiers(db: BetterSQLite3Database) {
     for(const job of db.select().from(Job).all()) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
         if(!infoRaw) continue
-        if(!isTitleRelevant(infoRaw.title) || !isLocationRelevant(infoRaw)) continue
+        if(!isLocationRelevant(infoRaw)) continue
 
         const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
         jobs.push(infoRaw)
@@ -49,7 +48,7 @@ export function calculateTiers(db: BetterSQLite3Database) {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => isTitleDesired(it.title) && isLocationDesired(it))
+        const desired = relevantJobs.find(it => isTitleRelevant(it.title))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
@@ -81,28 +80,33 @@ export function isLocationRelevant(job: any) {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
         const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
         const isRemote = /(remote|nationwide)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
 
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
     })
 }
+/*
 export function isLocationDesired(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
         const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
         const isRemote = /(remote|nationwide)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
         return isRemoteInUs || isMyLocal
     })
 }
+*/
 
-if(import.meta.main) {
-    const db = drizzle(new Database(process.env.ASHBYHQ_DB_PATH!))
-    Db.migrate(db)
-    const tiers = calculateTiers(db)
-    console.log(tiers.desiredCompanies.length, tiers.relevantCompanies.length)
-    //console.log(util.inspect(tiers.desiredCompanies, { maxArrayLength: Infinity }))
-    console.log('done')
-}
+
+
+
+import Database from 'better-sqlite3'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+
+const db = drizzle(new Database(process.env.DB_PATH!))
+Db.migrate(db)
+
+const results = calculateTiers(db)
+console.log(results.desiredCompanies.length, results.relevantCompanies.length)

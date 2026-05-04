@@ -280,7 +280,7 @@ function calculateTiers(db: BetterSQLite3Database) {
     for(const job of db.select().from(Job).all()) {
         const info: JobInfo | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
-        if(!AshbyTiers.isTitleRelevant(info.text) || !isLocationRelevant(info)) continue
+        if(!isLocationRelevant(info)) continue
 
         const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
         jobs.push({ ...job, info })
@@ -291,9 +291,7 @@ function calculateTiers(db: BetterSQLite3Database) {
     const relevantCompanies: string[] = []
 
     for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => {
-            return AshbyTiers.isTitleDesired(it.info.text) && isLocationDesired(it.info)
-        })
+        const desired = relevantJobs.find(it => AshbyTiers.isTitleRelevant(it.info.text))
         if(desired !== undefined) {
             desiredCompanies.push(companyName)
         }
@@ -314,23 +312,12 @@ function isLocationRelevant(info: JobInfo) {
             || info.country === 'US' || info.country === null
         const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
         const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
-        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(AshbyTiers.otherCountriesRegex1.test(location) || AshbyTiers.otherCountriesRegex2.test(location))))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
     })
 }
-function isLocationDesired(info: JobInfo) {
-    return getLocations(info).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
-            || info.country === 'US' || info.country === null
-        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
-        const isRemote = /(remote|nationwide)/i.test(location) || info.workplaceType === 'Remote'
-        const isRemoteInUs = (isRemote && (mentionsUs || mentionsUsConcrete || !(AshbyTiers.otherCountriesRegex1.test(location) || AshbyTiers.otherCountriesRegex2.test(location))))
-        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
-        return isRemoteInUs || isMyLocal
-    })
-}
 function getLocations(info: JobInfo) {
     return [
         ...(info.categories.location ? [info.categories.location] : []),
