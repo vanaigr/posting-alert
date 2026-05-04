@@ -69,7 +69,7 @@ export function isTitleRelevant(title: string) {
 }
 export function isTitleDesired(title: string) {
     return isTitleRelevant(title)
-        && !/\b(director|lead|manager|staff|qa)\b/i.test(title)
+        && !/\b(director|lead|manager|staff|qa|machine learning|servicenow)\b/i.test(title)
 }
 
 export function getJobLocations(job: any) {
