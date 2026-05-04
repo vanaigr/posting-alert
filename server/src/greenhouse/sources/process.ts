@@ -29,7 +29,7 @@ function addUrl(url: string) {
     )
 
     const companySlug = url.slice(prefixLen, nextSlashI)
-    const name = decodeURIComponent(companySlug)
+    const name = decodeURIComponent(companySlug).toLowerCase()
     companies.add(name)
 }
 
