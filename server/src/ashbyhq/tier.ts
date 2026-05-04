@@ -13,18 +13,14 @@ const { aCompany: Company, aJob: Job } = Db
 const cities: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'cities.json')).toString())
 const states: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'states.json')).toString())
 const stateCodes: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'stateCodes.json')).toString())
-const otherCountries: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'countries.json')).toString())
 
 export const citiesStatesRegex = new RegExp(
-    '('
+    '\\b('
         + [...cities, ...states].map(U.regexEscape).join('|')
-    + ')',
+    + ')\\b',
     'i'
 )
-export const stateCodesRegex = new RegExp('(' + stateCodes.map(U.regexEscape).join('|') + ')')
-
-export const otherCountriesRegex1 = new RegExp('(' + [...otherCountries, 'europe',  'south america', 'africa', 'asia'].map(U.regexEscape).join('|') + ')', 'i')
-export const otherCountriesRegex2 = new RegExp('(MEA|LATAM|APAC|MENA)')
+export const stateCodesRegex = new RegExp('\\b(' + stateCodes.map(U.regexEscape).join('|') + ')\\b')
 
 export type Tiers = {
     desiredCompanies: string[]
