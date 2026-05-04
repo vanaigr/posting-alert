@@ -148,6 +148,13 @@ export function migrate(db: BetterSQLite3Database) {
         }
     })
 
+    /*
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA cache_size = -64000;
+PRAGMA temp_store = MEMORY;
+PRAGMA mmap_size = 268435456;
+    */
     db.transaction((tx) => {
         const version = dbVersion(tx)
         if (version === 8) {
