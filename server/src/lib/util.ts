@@ -148,3 +148,7 @@ export function millisecToDurationString(ms: number) {
     if(hour <= 24) return hour + ' hr'
     return '>1 d'
 }
+
+export const bannedCompanies = [
+    'jobgether',
+]

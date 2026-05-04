@@ -35,16 +35,18 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const companiesInProcessList = [...companiesInProcess]
+        const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
         const quota = 5
         const desiredCompaniesToCheck = db.select().from(Company)
-            .where(D.or(
-                D.isNull(Company.exists),
-                D.and(
-                    D.eq(Company.exists, 1),
-                    D.inArray(Company.name, tiers.desiredCompanies),
-                    D.not(D.inArray(Company.name, companiesInProcessList)),
+            .where(D.and(
+                D.or(
+                    D.isNull(Company.exists),
+                    D.and(
+                        D.eq(Company.exists, 1),
+                        D.inArray(Company.name, tiers.desiredCompanies),
+                    ),
                 ),
+                D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
@@ -53,7 +55,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .where(D.and(
                 D.eq(Company.exists, 1),
                 D.inArray(Company.name, tiers.relevantCompanies),
-                D.not(D.inArray(Company.name, companiesInProcessList)),
+                D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
@@ -63,7 +65,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 D.eq(Company.exists, 1),
                 D.not(D.inArray(Company.name, tiers.desiredCompanies)),
                 D.not(D.inArray(Company.name, tiers.relevantCompanies)),
-                D.not(D.inArray(Company.name, companiesInProcessList)),
+                D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
             .limit(quota)
