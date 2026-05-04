@@ -253,6 +253,10 @@ type Job = {
 
 function isLocationRelevant(job: { location: { name: string } }) {
     const location = job.location.name
+    if(!location) {
+        console.log('missing location for', job)
+        return true
+    }
 
     const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
     const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
