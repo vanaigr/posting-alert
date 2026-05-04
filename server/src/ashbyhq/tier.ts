@@ -68,6 +68,7 @@ export function isJobRelevant(title: string) {
 }
 export function isJobDesired(title: string, description: string | undefined) {
     const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
+        || /\b(UX)\b/.test(title)
 
     if(description) {
         const descriptionDesired = /(typescript|type script|reactjs|nodejs)/i.test(description)
