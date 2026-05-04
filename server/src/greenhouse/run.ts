@@ -262,7 +262,7 @@ function isLocationRelevant(job: { location: { name: string }, content?: string 
     }
 
     const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
     const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
@@ -283,7 +283,7 @@ function isLocationDesired(job: { location: { name: string }, content?: string }
     }
 
     const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
     const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)

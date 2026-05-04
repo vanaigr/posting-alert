@@ -13,14 +13,22 @@ const { aCompany: Company, aJob: Job } = Db
 const cities: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'cities.json')).toString())
 const states: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'states.json')).toString())
 const stateCodes: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'stateCodes.json')).toString())
+const cityCodes: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'cityCodes.json')).toString())
 
-export const citiesStatesRegex = new RegExp(
+export const citiesStatesRegex1 = new RegExp(
     '\\b('
         + [...cities, ...states].map(U.regexEscape).join('|')
     + ')\\b',
     'i'
 )
-export const stateCodesRegex = new RegExp('\\b(' + stateCodes.map(U.regexEscape).join('|') + ')\\b')
+export const citiesStatesRegex2 = new RegExp(
+    '\\b('
+        + [
+            ...stateCodes,
+            ...cityCodes,
+        ].map(U.regexEscape).join('|')
+        + ')\\b',
+)
 
 export type Tiers = {
     desiredCompanies: string[]
@@ -87,7 +95,7 @@ export function getJobLocations(job: any) {
 export function isLocationRelevant(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+        const mentionsUsConcrete = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
 
@@ -97,7 +105,7 @@ export function isLocationRelevant(job: any) {
 export function isLocationDesired(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+        const mentionsUsConcrete = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)

@@ -315,7 +315,7 @@ function isLocationRelevant(info: JobInfo) {
     return getLocations(info).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null
-        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+        const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
 
@@ -327,7 +327,7 @@ function isLocationDesired(info: JobInfo) {
     return getLocations(info).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null
-        const mentionsUsConcrete = AshbyTiers.stateCodesRegex.test(location) || AshbyTiers.citiesStatesRegex.test(location)
+        const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
             || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
