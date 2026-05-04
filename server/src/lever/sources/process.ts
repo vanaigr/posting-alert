@@ -39,7 +39,7 @@ for(const url of urls1) {
     addUrl(url)
 }
 for(const name of names3) {
-    companies.add(name.toLowerCase())
+    companies.add(name)
 }
 
 console.log('Found', companies.size, 'companies')
