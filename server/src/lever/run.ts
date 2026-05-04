@@ -180,11 +180,13 @@ async function checkCompany(
             if(AshbyTiers.isTitleRelevant(job.text) && isLocationRelevant(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
+                const ago = U.millisecToDurationString(Date.now() - (job.createdAt || 0))
+
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     job.text + ' @ ' + company.name + '\n'
-                        + job.categories.allLocations.join(' | ') + '\n'
-                        + (job.hostedUrl || job.applyUrl),
+                        + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
+                        + `Lever ${ago} ago: ` + (job.hostedUrl || job.applyUrl),
                 )
             }
         }

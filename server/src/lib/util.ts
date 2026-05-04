@@ -136,3 +136,15 @@ export async function sendMessage(log: L.Log, message: string) {
         log.E('While sending notification: ', [err])
     }
 }
+
+export function millisecToDurationString(ms: number) {
+    const sec = ms / 1000
+
+    if(sec < 0) return 'error'
+    if(sec < 60) return '<1 min'
+    const min = Math.round(sec / 60)
+    if(min < 180)  return min +' min'
+    const hour = Math.round(min / 60)
+    if(hour <= 24) return hour + ' hr'
+    return '>1 d'
+}

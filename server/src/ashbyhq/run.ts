@@ -176,8 +176,9 @@ function checkCompany(
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     job.title + ' @ ' + company.name + '\n'
-                        + Tiers.getJobLocations(job).join(' | ') + '\n'
-                        + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
+                        + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
+                        // TODO: ashby should have a date field, it's not accurate but better than nothing
+                        + 'Ashby: ' + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
                 )
             }
         }
