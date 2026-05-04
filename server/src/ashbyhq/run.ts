@@ -71,7 +71,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
         const tiersCounts = U.selectCompanies(
             [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
-            [0.5, 0.25, 0.25],
+            [0.5, 0.1, 0.25], // TODO: unbias this based on company counts
             quota,
         )
         desiredCompaniesToCheck.length = tiersCounts[0]
@@ -170,7 +170,7 @@ function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tiers.isTitleRelevant(job.title) && Tiers.isLocationRelevant(job)) {
+            if(Tiers.isTitleDesired(job.title) && Tiers.isLocationRelevant(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
                 U.sendMessage(

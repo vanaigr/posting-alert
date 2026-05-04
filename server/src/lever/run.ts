@@ -177,7 +177,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(AshbyTiers.isTitleRelevant(job.text) && isLocationRelevant(job)) {
+            if(AshbyTiers.isTitleDesired(job.text) && isLocationRelevant(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
                 const ago = U.millisecToDurationString(Date.now() - (job.createdAt || 0))
