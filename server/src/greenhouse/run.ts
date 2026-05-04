@@ -41,7 +41,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
         rateLimit = false
 
-        mainLog.I('Tick')
+        mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const companiesInProcessList = [...companiesInProcess]
