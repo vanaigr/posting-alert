@@ -93,6 +93,18 @@ export function isLocationRelevant(job: any) {
         return mentionsUs || mentionsUsConcrete || isRemoteInUs
     })
 }
+export function isLocationDesired(job: any) {
+    return getJobLocations(job).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.)/i.test(location)
+        const mentionsUsConcrete = stateCodesRegex.test(location) || citiesStatesRegex.test(location)
+        const isRemote = /(remote|nationwide)/i.test(location) || job.workplaceType === 'Remote'
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+        const onSite = !isRemote && (job.workplaceType === 'OnSite' || job.workplaceType === 'Hybrid')
+
+        return isRemoteInUs || isMyLocal || ((mentionsUs || mentionsUsConcrete) && !(mentionsUsConcrete && onSite))
+    })
+}
 
 /*
 export function isLocationDesired(job: any) {

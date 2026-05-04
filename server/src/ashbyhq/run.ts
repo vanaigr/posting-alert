@@ -172,7 +172,7 @@ function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tiers.isJobDesired(job.title, undefined) && Tiers.isLocationRelevant(job)) {
+            if(Tiers.isJobDesired(job.title, undefined) && Tiers.isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
                 U.sendMessage(
