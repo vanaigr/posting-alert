@@ -207,6 +207,7 @@ async function checkCompany(
 
 async function requestCompany(log: L.Log, connection: N.Connection, companyName: string) {
     try {
+        // https://github.com/grnhse/greenhouse-api-docs/blob/2e9f2d8a573a6843c838cd5f4050f57f23f0494d/source/includes/job-board/_jobs.md?plain=1#L1
         const response = await N.fetch(connection, {
             method: 'GET',
             path: '/v1/boards/' + encodeURIComponent(companyName) + '/jobs',
