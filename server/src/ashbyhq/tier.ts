@@ -66,10 +66,13 @@ export function calculateTiers(db: BetterSQLite3Database) {
 const titleRegex = /(engineer|developer|programmer)/i
 export function isTitleRelevant(title: string) {
     return titleRegex.test(title)
+        && !(
+            /(site reliability engineer|sales engineer|solution engineer)/i.test(title)
+        )
 }
 export function isTitleDesired(title: string) {
     return isTitleRelevant(title)
-        && !/\b(director|lead|manager|staff|qa|machine learning|servicenow)\b/i.test(title)
+        && !/\b(director|lead|manager|staff|supervisor|principal|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
 }
 
 export function getJobLocations(job: any) {
@@ -98,15 +101,3 @@ export function isLocationDesired(job: any) {
     })
 }
 */
-
-
-
-
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-
-const db = drizzle(new Database(process.env.DB_PATH!))
-Db.migrate(db)
-
-const results = calculateTiers(db)
-console.log(results.desiredCompanies.length, results.relevantCompanies.length)
