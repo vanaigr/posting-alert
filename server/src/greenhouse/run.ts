@@ -179,7 +179,7 @@ async function checkCompany(
                     log.addedCtx('job ', [id]),
                     job.title + ' @ ' + company.name + '\n'
                         + (job.location?.name ?? '') + '\n'
-                        + `GH ${ago} ago:` + job.absolute_url,
+                        + `GH ${ago} ago: ` + job.absolute_url,
                 )
             }
         }
