@@ -42,7 +42,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         rateLimit = false
 
         mainLog.I('Tick')
-        const nextTick = T.Now.instant().add({ seconds: 1, milliseconds: 100 })
+        const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const companiesInProcessList = [...companiesInProcess]
         const quota = 5
