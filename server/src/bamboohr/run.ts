@@ -241,15 +241,7 @@ async function checkCompany(
 
 async function requestCompany(log: L.Log, companyName: string) {
     try {
-        // TODO: go.bamboohr.com fails every time. Delete it
-        const response = await N.fetch2({
-            url: `https://${companyName}.bamboohr.com/careers/list`,
-            allowRedirect: (url) => {
-                if(url.hostname === 'www.bamboohr.com') return false
-                if(url.pathname === '/login.php') return false
-                return true
-            },
-        })
+        const response = await fetch(`https://${companyName}.bamboohr.com/careers/list`)
         if(response.status === 429) {
             log.E('Rate limited')
             await response.text().catch(() => {})
@@ -275,10 +267,6 @@ async function requestCompany(log: L.Log, companyName: string) {
         return U.result('ok', json)
     }
     catch(err) {
-        if(err instanceof N.BlockedHostError) {
-            return U.status('not-found')
-        }
-
         log.E('While requesting: ', [err])
         return U.status('error')
     }
