@@ -351,8 +351,10 @@ function isLocationRelevant(info: FetchJob) {
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
     const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
+    const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
+        && info.location.state === null && info.location.city === null
 
-    return isInUs || mentionsUsConcrete || isRemoteInUs
+    return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 function isLocationDesired(info: FetchJob) {
     const cityState = (info.atsLocation.city || info.location.city || '')
@@ -367,7 +369,9 @@ function isLocationDesired(info: FetchJob) {
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
     const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
+    const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
+        && info.location.state === null && info.location.city === null
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
-    return isRemoteInUs || isMyLocal
+    return isRemoteInUs || isRemoteWorldwide || isMyLocal
 }

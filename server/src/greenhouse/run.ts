@@ -270,8 +270,9 @@ function isLocationRelevant(job: { location: { name: string }, content?: string 
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
     const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
 
-    return mentionsUs || mentionsUsConcrete || isRemoteInUs
+    return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 
 function isLocationDesired(job: { location: { name: string }, content?: string }) {
@@ -291,9 +292,10 @@ function isLocationDesired(job: { location: { name: string }, content?: string }
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
     const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
     const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
-    return isRemoteInUs || isMyLocal
+    return isRemoteInUs || isRemoteWorldwide || isMyLocal
 }
 
 type Tiers = {

@@ -323,8 +323,9 @@ function isLocationRelevant(info: JobInfo) {
         const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
 
-        return mentionsUs || mentionsUsConcrete || isRemoteInUs
+        return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
     })
 }
 // NOTE: assumes info.descriptionPlain exists
@@ -336,9 +337,10 @@ function isLocationDesired(info: JobInfo) {
         const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
             || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
         const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
 
-        return isRemoteInUs || isMyLocal
+        return isRemoteInUs || isRemoteWorldwide || isMyLocal
     })
 }
 
