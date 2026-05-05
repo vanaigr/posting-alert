@@ -35,21 +35,29 @@ type FileLog = {
   path: string;
 };
 function writeFileLog(it: FileLog) {
-  if (it.current || !it.pending) return;
+    if (it.current || !it.pending) return
 
-  it.current = (async () => {
-    const file = await fsp.open(it.path, 'a');
-    try {
-      const pending = it.pending;
-      it.pending = '';
-      await file.write(pending);
-    } finally {
-      await file.close();
-    }
-
-    it.current = undefined;
-    return writeFileLog(it);
-  })();
+    it.current = (async () => {
+        const pending = it.pending
+        it.pending = ''
+        try {
+            const file = await fsp.open(it.path, 'a')
+            try {
+                await file.write(pending)
+            } finally {
+                await file.close()
+            }
+        }
+        catch (err) {
+            it.pending = pending + it.pending
+            throw err
+        }
+        finally {
+            it.current = undefined
+        }
+        writeFileLog(it)
+    })()
+    it.current.catch(() => {})
 }
 
 export function makeStubLogger(): Log {
