@@ -262,7 +262,6 @@ function isLocationRelevant(job: { location: { name: string }, content?: string 
     const location = job.location.name
     const content = job.content
     if(!location) {
-        console.log('missing location for', job)
         return true
     }
 
