@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -32,6 +33,8 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false
+
+    const connection = new Agent({}).compose(interceptors.dns())
 
     let tiers: Tiers = calculateTiers(db)
     mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
@@ -110,7 +113,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
             try {
                 companiesInProcess.add(company.name)
-                const result = await checkCompany(db, log, currentTime, company, tier)
+                const result = await checkCompany(db, log, currentTime, connection, company, tier)
                 if(result.status === 'rate-limit') rateLimit = true
             }
             catch(err) {
@@ -133,10 +136,11 @@ async function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
+    connection: Dispatcher,
     company: D.InferSelectModel<typeof Company>,
     tier: string,
 ) {
-    const result = await requestCompany(log, company.name)
+    const result = await requestCompany(log, connection, company.name)
     if(result.status === 'rate-limit') return result
 
     db.update(Company)
@@ -243,9 +247,11 @@ async function checkCompany(
     return U.status('ok')
 }
 
-async function requestCompany(log: L.Log, companyName: string) {
+async function requestCompany(log: L.Log, connection: Dispatcher, companyName: string) {
     try {
-        const response = await fetch(`https://${companyName}.bamboohr.com/careers/list`)
+        const response = await undiciFetch(`https://${companyName}.bamboohr.com/careers/list`, {
+            dispatcher: connection,
+        })
         if(response.status === 429) {
             log.E('Rate limited')
             await response.text().catch(() => {})
