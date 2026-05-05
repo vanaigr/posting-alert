@@ -226,6 +226,7 @@ async function checkCompany(
 
 async function requestCompany(log: L.Log, companyName: string) {
     try {
+        // TODO: go.bamboohr.com fails every time. Delete it
         const response = await N.fetch2({
             url: `https://${companyName}.bamboohr.com/careers/list`,
             allowRedirect: (url) => {
@@ -240,18 +241,21 @@ async function requestCompany(log: L.Log, companyName: string) {
             return U.status('rate-limit')
         }
 
+        if(response.status === 404) {
+            log.E('Not found')
+            return U.status('not-found')
+        }
         if(response.status !== 200) {
             log.E('Request failed: ', [response.status], ': ', [await response.text().catch(err => err)])
             return U.status('error')
         }
-
-        const text = await response.text()
-        try { JSON.parse(text) }
-        catch(err) {
-            console.log(text, response.url)
+        if(response.headers.get('content-type') !== 'application/json') {
+            await response.text().catch(err => err)
+            log.E('Returned non-json ', [response.headers.get('content-type')])
+            return U.status('not-found')
         }
 
-        const json = await JSON.parse(text) as { result: FetchJob[] }
+        const json = await response.json() as { result: FetchJob[] }
         return U.result('ok', json)
     }
     catch(err) {
