@@ -14,7 +14,6 @@ export const aCompany = sqliteTable('ashbyhq_company', {
 export const aJob = sqliteTable('ashbyhq_job', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
-    toFetch: integer('to_fetch').notNull(),
     shortInfo: text('short_info').notNull(),
     longInfo: text('long_info'),
     fetchedEpochMs: integer('fetched_epoch_ms'),
@@ -22,6 +21,13 @@ export const aJob = sqliteTable('ashbyhq_job', {
 
 export const aToReview = sqliteTable('ashbyhq_to_review', {
     id: text('id').primaryKey(),
+})
+
+export const aFetchJobDetails = sqliteTable('ashby_fetch_job_details', {
+    id: text('id').primaryKey(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
 })
 
 export const lCompany = sqliteTable('lever_company', {
@@ -231,6 +237,20 @@ PRAGMA mmap_size = 268435456;
                 original_epoch_ms INTEGER NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 12`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 12) {
+            tx.run(sql`ALTER TABLE ashbyhq_job DROP COLUMN to_fetch`)
+            tx.run(sql`CREATE TABLE ashby_fetch_job_details (
+                id TEXT PRIMARY KEY,
+                added_at INTEGER NOT NULL,
+                job_posted_after INTEGER NOT NULL,
+                company_tier TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 13`)
         }
     })
 }

@@ -9,13 +9,14 @@ import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
 import * as N from '../lib/network.ts'
 
-const { aCompany: Company, aJob: Job } = Db
+const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     populate(db)
     mainLog.I('Populated companies')
 
     const companiesInProcess = new Set<string>()
+    const jobsInProcess = new Set<string>()
     let rateLimit = false
 
     let tiers: Tiers.Tiers = Tiers.calculateTiers(db)
@@ -84,11 +85,29 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         relevantCompaniesToCheck.length = tiersCounts[1]
         otherCompaniesToCheck.length = tiersCounts[2]
 
+        const jobsToSkip = [...jobsInProcess]
+        const jobsToCheckDetails = db.select({
+            id: FetchJobDetails.id,
+            companyName: Job.companyName,
+            addedAt: FetchJobDetails.addedAt,
+            jobPostedAfter: FetchJobDetails.jobPostedAfter,
+            companyTier: FetchJobDetails.companyTier,
+            shortInfo: Job.shortInfo,
+            longInfo: Job.longInfo,
+        })
+            .from(FetchJobDetails)
+            .innerJoin(Job, D.eq(FetchJobDetails.id, Job.id))
+            .where(D.not(D.inArray(FetchJobDetails.id, jobsToSkip)))
+            .orderBy(D.asc(FetchJobDetails.addedAt))
+            .limit(5)
+            .all()
+
         mainLog.I(
             'Checking: ',
             [desiredCompaniesToCheck.length], ', ',
             [relevantCompaniesToCheck.length], ', ',
             [otherCompaniesToCheck.length], ', ',
+            'job details: ', [jobsToCheckDetails.length],
         )
 
         ;(async() => {
@@ -102,8 +121,19 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             try {
                 const companyNames = companiesToCheck.map(it => it.name)
                 for(const it of companiesToCheck) companiesInProcess.add(it.name)
+                for(const it of jobsToCheckDetails) jobsInProcess.add(it.id)
 
-                const result = await getCompaniesDetails(connection, mainLog, companyNames)
+                const jobDetailRequests: { id: string, companyName: string }[] = []
+                for(const job of jobsToCheckDetails) {
+                    if(job.longInfo === null) {
+                        jobDetailRequests.push({
+                            companyName: job.companyName,
+                            id: job.id,
+                        })
+                    }
+                }
+
+                const result = await getCompaniesDetails(connection, mainLog, companyNames, jobDetailRequests)
                 if(result.status === 'rate-limit') {
                     rateLimit = true
                     return
@@ -111,24 +141,60 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
                 const currentTime = Date.now()
 
-                db.update(Company)
-                    .set({ checkedEpochMs: currentTime })
-                    .where(D.inArray(Company.name, companyNames))
-                    .run()
+                if(companyNames.length > 0) {
+                    db.update(Company)
+                        .set({ checkedEpochMs: currentTime })
+                        .where(D.inArray(Company.name, companyNames))
+                        .run()
+                }
 
                 if(result.status !== 'ok') return
+
+                const promises: Promise<unknown>[] = []
 
                 for(let i = 0; i < companiesToCheck.length; i++) {
                     const company = companiesToCheck[i]
                     const log = mainLog.addedCtx(company.name)
-                    await checkCompany(db, log, currentTime, company, result.data[i], tiersByIndex[i])
+                    try {
+                        checkCompany(
+                            db, log, currentTime,
+                            company, result.data.companies[i], tiersByIndex[i],
+                        )
+                    }
+                    catch(err) {
+                        log.E([err])
+                    }
                 }
+
+                let detailI = 0
+                for(let i = 0; i < jobsToCheckDetails.length; i++) {
+                    const fetchRow = jobsToCheckDetails[i]
+                    if(fetchRow.longInfo === null) {
+                        const detail = result.data.jobDetails[detailI]
+                        detailI++
+                        // I don't know how it conveys that the thing does not exist
+                        // (may have been deleted before we could get it).
+                        const longInfo = detail ? JSON.stringify(detail) : null
+
+                        db.update(Job)
+                            .set({ longInfo })
+                            .where(D.eq(Job.id, fetchRow.id))
+                            .run()
+                        fetchRow.longInfo = longInfo
+                    }
+
+                    const log = mainLog.addedCtx([fetchRow.companyName], ' job ', [fetchRow.id])
+                    promises.push(processJobDetail(db, log, fetchRow))
+                }
+
+                await Promise.allSettled(promises)
             }
             catch(err) {
                 mainLog.E('While checking: ', [err])
             }
             finally {
                 for(const it of companiesToCheck) companiesInProcess.delete(it.name)
+                for(const it of jobsToCheckDetails) jobsInProcess.delete(it.id)
             }
         })()
 
@@ -136,7 +202,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     }
 }
 
-async function checkCompany(
+function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
@@ -165,14 +231,13 @@ async function checkCompany(
     )
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
-    const promises: Promise<void>[] = []
+    const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
         toInsert.push({
             id: job.id,
             companyName: company.name,
-            toFetch: initial ? 0 : 1,
             shortInfo: JSON.stringify({
                 job,
                 team: jobBoard.teams.find(it => it.id === job.teamId) ?? null,
@@ -184,22 +249,16 @@ async function checkCompany(
         if(!initial) {
             log.I('New job ', [job.id])
             if(Tiers.isJobDesired(job.title, undefined) && Tiers.isLocationDesired(job)) {
-                log.I('Job ', job.id, ' is relevant!')
-
-                const ago = U.millisecToDurationString(Date.now() - (company.checkedEpochMs ?? 0))
-
-                promises.push(U.sendMessage(
-                    log.addedCtx('job ', [job.id]),
-                    db,
-                    job.title + ' @ ' + company.name + '\n'
-                        + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
-                        + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
-                ))
+                log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
+                toEnqueueDetails.push({
+                    id: job.id,
+                    addedAt: currentTime,
+                    jobPostedAfter: company.checkedEpochMs ?? 0,
+                    companyTier: tier,
+                })
             }
         }
     }
-
-    await Promise.allSettled(promises)
 
     db.transaction(db => {
         db.update(Company)
@@ -208,6 +267,9 @@ async function checkCompany(
             .run()
         if(toInsert.length > 0) {
             db.insert(Job).values(toInsert).run()
+        }
+        if(toEnqueueDetails.length > 0) {
+            db.insert(FetchJobDetails).values(toEnqueueDetails).run()
         }
     })
 
@@ -219,21 +281,63 @@ async function checkCompany(
     }
 }
 
-async function getCompaniesDetails(connection: N.Connection, log: L.Log, companies: string[]) {
-    const companiesEncoded = companies.map((_, i) => encodeIndex(i))
-    const header = 'query ApiJobBoardWithTeams('
-        + companiesEncoded.map(it => '$' + it + ': String!').join(', ')
-        + ') {\n'
+async function processJobDetail(
+    db: BetterSQLite3Database,
+    log: L.Log,
+    fetchRow: { id: string, companyName: string, companyTier: string, addedAt: number, jobPostedAfter: number, shortInfo: string, longInfo: string | null },
+) {
+    const shortInfo = JSON.parse(fetchRow.shortInfo)
+    const job = shortInfo.job
 
-        const footer = `
+    let shouldSend = false
+    if(!fetchRow.longInfo) {
+        log.W('Could not get job info. Considering relevant')
+        shouldSend = true
+    }
+    else {
+        const detail = JSON.parse(fetchRow.longInfo)
+        if(Tiers.isJobDesired(job.title, detail.descriptionHtml ?? undefined) && Tiers.isLocationDesired(job)) {
+            log.I('Job is still relevant after detail check')
+            shouldSend = true
+        }
+    }
+
+    if(shouldSend) {
+        const tier = fetchRow.companyTier
+
+        const ago = U.millisecToDurationString(Date.now() - fetchRow.jobPostedAfter)
+
+        await U.sendMessage(
+            log,
+            db,
+            job.title + ' @ ' + fetchRow.companyName + '\n'
+                + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
+                + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.companyName)}/${encodeURIComponent(fetchRow.id)}`
+        )
+    }
+
+    db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.id, fetchRow.id)).run()
 }
 
-fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
-  locationId
-  locationName
-  __typename
-}
-`.trim()
+async function getCompaniesDetails(
+    connection: N.Connection,
+    log: L.Log,
+    companies: string[],
+    jobDetails: { companyName: string, id: string }[],
+) {
+    if(companies.length === 0 && jobDetails.length === 0) {
+        return U.result('ok', { companies: [], jobDetails: [] })
+    }
+
+    const companyEncoded = companies.map((_, i) => encodeIndex(i))
+    const jobDetailEncoded = jobDetails.map((_, i) => encodeIndex(i))
+
+    const variableDefs: string[] = []
+    for(const e of companyEncoded) variableDefs.push('$c' + e + ': String!')
+    for(const e of jobDetailEncoded) {
+        variableDefs.push('$jc' + e + ': String!')
+        variableDefs.push('$ji' + e + ': String!')
+    }
 
     const boardParams = `
     teams {
@@ -261,26 +365,67 @@ fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
     __typename
 `.trim()
 
-    const graphql = header
-        + companiesEncoded.map(encoded => {
-            return '  '
-                + encoded
-                + ': jobBoardWithTeams(organizationHostedJobsPageName: $'
-                + encoded
-                + ') {\n    ' + boardParams + '\n  }'
-        }).join('\n')
-        + '\n'
-        + footer
+    const jobPostingParams = `
+    id
+    title
+    departmentName
+    locationName
+    workplaceType
+    employmentType
+    descriptionHtml
+    teamNames
+    publishedDate
+    compensationTierSummary
+`.trim()
 
-    //console.log(graphql)
-    //return U.status('error')
+    const companySelections = companyEncoded.map(encoded => {
+        return '  '
+            + 'c' + encoded
+            + ': jobBoardWithTeams(organizationHostedJobsPageName: $c'
+            + encoded
+            + ') {\n    ' + boardParams + '\n  }'
+    })
+    const jobSelections = jobDetailEncoded.map(encoded => {
+        return '  '
+            + 'j' + encoded
+            + ': jobPosting(organizationHostedJobsPageName: $jc'
+            + encoded
+            + ', jobPostingId: $ji'
+            + encoded
+            + ') {\n    ' + jobPostingParams + '\n  }'
+    })
 
-    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams>>(
+    const fragments: string[] = []
+    if(companies.length > 0) {
+        fragments.push(`fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
+  locationId
+  locationName
+  __typename
+}`)
+    }
+
+    const graphql = 'query ApiJobBoardWithTeams('
+        + variableDefs.join(', ')
+        + ') {\n'
+        + [...companySelections, ...jobSelections].join('\n')
+        + '\n}'
+        + (fragments.length > 0 ? '\n\n' + fragments.join('\n\n') : '')
+
+    const variables: Record<string, string> = {}
+    for(let i = 0; i < companies.length; i++) {
+        variables['c' + companyEncoded[i]] = companies[i]
+    }
+    for(let i = 0; i < jobDetails.length; i++) {
+        variables['jc' + jobDetailEncoded[i]] = jobDetails[i].companyName
+        variables['ji' + jobDetailEncoded[i]] = jobDetails[i].id
+    }
+
+    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams | ApiJobPosting>>(
         connection,
         log,
         {
             operationName: 'ApiJobBoardWithTeams',
-            variables: Object.fromEntries(companiesEncoded.map((encoded, i) => [encoded, companies[i]])),
+            variables,
             query: graphql,
         }
     )
@@ -288,7 +433,10 @@ fragment JobPostingSecondaryLocationParts on JobPostingSecondaryLocation {
 
     return U.result(
         'ok',
-        companiesEncoded.map(encoded => responseStatus.data[encoded]),
+        {
+            companies: companyEncoded.map(e => responseStatus.data['c' + e] as ApiJobBoardWithTeams),
+            jobDetails: jobDetailEncoded.map(e => responseStatus.data['j' + e] as ApiJobPosting),
+        },
     )
 }
 
@@ -321,6 +469,19 @@ type ApiJobBoardWithTeams = null | {
         secondaryLocations: string[] // TODO
         compensationTierSummary: null
     }[]
+}
+
+type ApiJobPosting = null | {
+    id: string
+    title: string
+    departmentName: string | null
+    locationName: string | null
+    workplaceType: string | null
+    employmentType: string | null
+    descriptionHtml: string | null
+    teamNames: string[] | null
+    publishedDate: string | null
+    compensationTierSummary: string | null
 }
 
 async function fetchGraphql<T extends {}>(connection: N.Connection, log: L.Log, body: any) {
