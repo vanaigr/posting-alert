@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from './lib/db.ts'
 import * as L from './lib/log.ts'
+import * as U from './lib/util.ts'
 import * as Ashbyhq from './ashbyhq/run.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
@@ -19,6 +20,7 @@ async function main() {
         Lever.run(db, mainLog.addedCtx('lever')),
         Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
         Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        U.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

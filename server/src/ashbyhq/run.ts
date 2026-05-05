@@ -187,6 +187,7 @@ function checkCompany(
 
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
+                    db,
                     job.title + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
                         // TODO: ashby should have a date field, it's not accurate but better than nothing

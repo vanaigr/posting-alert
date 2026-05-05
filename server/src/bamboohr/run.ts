@@ -219,6 +219,7 @@ async function checkCompany(
 
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
+                    db,
                     job.jobOpeningName + ' @ ' + company.name + '\n'
                         + workplaceType + ': ' + location + '\n'
                         + `Bamboo ${tier}: ` + `https://${company.name}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,

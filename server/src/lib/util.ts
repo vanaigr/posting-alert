@@ -1,5 +1,9 @@
+import * as D from 'drizzle-orm'
+import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+
 import * as L from './log.ts'
 import * as T from './temporal.ts'
+import * as Db from './db.ts'
 
 export async function timedAsync<const R, const A extends unknown[]>(
   fn: (...args: A) => R,
@@ -112,7 +116,7 @@ export function selectCompanies<T>(tiers: T[][], probabilities: number[], quota:
     return selectCounts
 }
 
-export async function sendMessage(log: L.Log, message: string) {
+async function trySendMessage(log: L.Log, message: string): Promise<boolean> {
     try {
         const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
@@ -131,9 +135,45 @@ export async function sendMessage(log: L.Log, message: string) {
             throw new Error(`Telegram error: ${body.description}`)
         }
         log.I('Sent successfully')
+        return true
     }
     catch(err) {
         log.E('While sending notification: ', [err])
+        return false
+    }
+}
+
+export async function sendMessage(log: L.Log, db: BetterSQLite3Database, message: string) {
+    const originalEpochMs = Date.now()
+    const ok = await trySendMessage(log, message)
+    if(ok) return
+
+    try {
+        db.insert(Db.pendingNotification).values({ message, originalEpochMs }).run()
+        log.I('Persisted notification for retry')
+    }
+    catch(err) {
+        log.E('Failed to persist pending notification: ', [err])
+    }
+}
+
+export async function runPendingNotificationService(db: BetterSQLite3Database, log: L.Log) {
+    while(true) {
+        await delay(T.Now.instant().add({ seconds: 30 }))
+
+        const rows = db.select().from(Db.pendingNotification).all()
+        for(const row of rows) {
+            const suffix = '\n' + `Delayed by: ${millisecToDurationString(Date.now() - row.originalEpochMs)}`
+            const ok = await trySendMessage(log.addedCtx('retry ', [row.id]), row.message + suffix)
+            if(!ok) continue
+
+            try {
+                db.delete(Db.pendingNotification).where(D.eq(Db.pendingNotification.id, row.id)).run()
+            }
+            catch(err) {
+                log.E('Failed to delete pending notification ', [row.id], ': ', [err])
+            }
+        }
     }
 }
 

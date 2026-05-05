@@ -184,6 +184,7 @@ async function checkCompany(
 
                 U.sendMessage(
                     log.addedCtx('job ', [id]),
+                    db,
                     job.title + ' @ ' + company.name + '\n'
                         + (job.location?.name ?? '') + '\n'
                         + `GH ${tier} ${ago} ago: ` + job.absolute_url,

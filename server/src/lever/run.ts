@@ -192,6 +192,7 @@ async function checkCompany(
 
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
+                    db,
                     job.text + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
                         + `Lever ${tier} ${ago} ago: ` + (job.hostedUrl || job.applyUrl),

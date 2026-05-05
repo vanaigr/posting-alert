@@ -70,6 +70,12 @@ export const bamboohrJob = sqliteTable(
     ]
 )
 
+export const pendingNotification = sqliteTable('pending_notification', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    message: text('message').notNull(),
+    originalEpochMs: integer('original_epoch_ms').notNull(),
+})
+
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
         const version = dbVersion(tx)
@@ -213,6 +219,18 @@ PRAGMA mmap_size = 268435456;
         if (version === 10) {
             tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
             tx.run(sql`PRAGMA user_version = 11`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 11) {
+            tx.run(sql`CREATE TABLE pending_notification (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message TEXT NOT NULL,
+                original_epoch_ms INTEGER NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 12`)
         }
     })
 }
