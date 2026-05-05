@@ -1,0 +1,13 @@
+[Unit]
+Description=My Run
+After=network.target
+
+[Service]
+User=me
+WorkingDirectory=/home/me/posting-alert/server
+ExecStart=/home/me/.nvm/versions/node/v24.15.0/bin/node src/index.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
