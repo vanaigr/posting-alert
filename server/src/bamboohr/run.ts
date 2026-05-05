@@ -144,13 +144,29 @@ async function checkCompany(
         log.I('Company does not exist')
 
         db.update(Company)
-            .set({ exists: 0 })
+            .set({ exists: 0, failCount: 0 })
             .where(D.eq(Company.name, company.name))
             .run()
         return U.status('ok')
     }
 
-    if(result.status !== 'ok') return U.status('ok')
+    if(result.status !== 'ok') {
+        const newFailCount = company.failCount + 1
+        if(newFailCount >= 10 && company.exists === null) {
+            log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
+            db.update(Company)
+                .set({ exists: 0, failCount: newFailCount })
+                .where(D.eq(Company.name, company.name))
+                .run()
+        }
+        else {
+            db.update(Company)
+                .set({ failCount: newFailCount })
+                .where(D.eq(Company.name, company.name))
+                .run()
+        }
+        return U.status('ok')
+    }
 
     const initial = company.exists === null
 

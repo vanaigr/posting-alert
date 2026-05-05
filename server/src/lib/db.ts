@@ -54,6 +54,7 @@ export const bamboohrCompany = sqliteTable('bamboohr_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
 })
 
 export const bamboohrJob = sqliteTable(
@@ -204,6 +205,14 @@ PRAGMA mmap_size = 268435456;
             )`)
             tx.run(sql`CREATE INDEX bamboohr_company_exists_checked_idx ON bamboohr_company("exists", checked_epoch_ms)`)
             tx.run(sql`PRAGMA user_version = 10`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 10) {
+            tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`PRAGMA user_version = 11`)
         }
     })
 }
