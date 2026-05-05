@@ -215,7 +215,7 @@ async function checkCompany(
                     job.atsLocation.state || job.location.state,
                     job.atsLocation.province,
                     job.atsLocation.country,
-                ].filter(it => it !== undefined).join(', ')
+                ].filter(it => it !== null).join(', ')
 
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
