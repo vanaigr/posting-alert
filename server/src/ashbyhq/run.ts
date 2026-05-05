@@ -89,6 +89,11 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
         ;(async() => {
             const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
+            const tiersByIndex: string[] = [
+                ...desiredCompaniesToCheck.map(() => 'I'),
+                ...relevantCompaniesToCheck.map(() => 'II'),
+                ...otherCompaniesToCheck.map(() => 'III'),
+            ]
 
             try {
                 const companyNames = companiesToCheck.map(it => it.name)
@@ -112,7 +117,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 for(let i = 0; i < companiesToCheck.length; i++) {
                     const company = companiesToCheck[i]
                     const log = mainLog.addedCtx(company.name)
-                    checkCompany(db, log, currentTime, company, result.data[i])
+                    checkCompany(db, log, currentTime, company, result.data[i], tiersByIndex[i])
                 }
             }
             catch(err) {
@@ -133,6 +138,7 @@ function checkCompany(
     currentTime: number,
     company: D.InferSelectModel<typeof Company>,
     jobBoard: ApiJobBoardWithTeams,
+    tier: string,
 ) {
     if(jobBoard === null) {
         log.I('Company does not exist')
@@ -180,7 +186,7 @@ function checkCompany(
                     job.title + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
                         // TODO: ashby should have a date field, it's not accurate but better than nothing
-                        + 'Ashby: ' + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
+                        + `Ashby ${tier}: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
                 )
             }
         }

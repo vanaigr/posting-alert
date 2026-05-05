@@ -96,26 +96,26 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [otherCompaniesToCheck.length], ', ',
         )
 
-        const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
         const currentTime = Date.now()
-
-        for(const company of companiesToCheck) {
+        const handleCompanny = async(company: D.InferSelectModel<typeof Company>, tier: string) => {
             const log = mainLog.addedCtx(company.name)
 
-            ;(async() => {
-                try {
-                    companiesInProcess.add(company.name)
-                    const result = await checkCompany(db, log, currentTime, connection, company)
-                    if(result.status === 'rate-limit') rateLimit = true
-                }
-                catch(err) {
-                    log.E('While checking: ', [err])
-                }
-                finally {
-                    companiesInProcess.delete(company.name)
-                }
-            })()
+            try {
+                companiesInProcess.add(company.name)
+                const result = await checkCompany(db, log, currentTime, connection, company, tier)
+                if(result.status === 'rate-limit') rateLimit = true
+            }
+            catch(err) {
+                log.E('While checking: ', [err])
+            }
+            finally {
+                companiesInProcess.delete(company.name)
+            }
         }
+
+        for(const it of desiredCompaniesToCheck) handleCompanny(it, 'I')
+        for(const it of relevantCompaniesToCheck) handleCompanny(it, 'II')
+        for(const it of otherCompaniesToCheck) handleCompanny(it, 'III')
 
         await U.delay(nextTick)
     }
@@ -127,6 +127,7 @@ async function checkCompany(
     currentTime: number,
     connection: N.Connection,
     company: D.InferSelectModel<typeof Company>,
+    tier: string,
 ) {
     const result = await requestCompany(log, connection, company.name)
     if(result.status === 'rate-limit') return result
@@ -181,7 +182,7 @@ async function checkCompany(
                     log.addedCtx('job ', [id]),
                     job.title + ' @ ' + company.name + '\n'
                         + (job.location?.name ?? '') + '\n'
-                        + `GH ${ago} ago: ` + job.absolute_url,
+                        + `GH ${tier} ${ago} ago: ` + job.absolute_url,
                 )
             }
         }
