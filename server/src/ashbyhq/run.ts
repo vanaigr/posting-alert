@@ -121,7 +121,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 for(let i = 0; i < companiesToCheck.length; i++) {
                     const company = companiesToCheck[i]
                     const log = mainLog.addedCtx(company.name)
-                    checkCompany(db, log, currentTime, company, result.data[i], tiersByIndex[i])
+                    await checkCompany(db, log, currentTime, company, result.data[i], tiersByIndex[i])
                 }
             }
             catch(err) {
@@ -136,7 +136,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     }
 }
 
-function checkCompany(
+async function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
@@ -165,6 +165,7 @@ function checkCompany(
     )
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
+    const promises: Promise<void>[] = []
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
@@ -187,16 +188,18 @@ function checkCompany(
 
                 const ago = U.millisecToDurationString(Date.now() - (company.checkedEpochMs ?? 0))
 
-                U.sendMessage(
+                promises.push(U.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     db,
                     job.title + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
                         + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
-                )
+                ))
             }
         }
     }
+
+    await Promise.allSettled(promises)
 
     db.transaction(db => {
         db.update(Company)

@@ -164,6 +164,7 @@ async function checkCompany(
     )
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
+    const promises: Promise<void>[] = []
     for(const job of result.data) {
         const id = String(job.id)
         if(existingJobs.has(id)) continue
@@ -182,16 +183,18 @@ async function checkCompany(
 
                 const ago = U.millisecToDurationString(Date.now() - (new Date(job.updated_at).getTime() || 0))
 
-                U.sendMessage(
+                promises.push(U.sendMessage(
                     log.addedCtx('job ', [id]),
                     db,
                     job.title + ' @ ' + company.name + '\n'
                         + (job.location?.name ?? '') + '\n'
                         + `GH ${tier} ${ago} ago: ` + job.absolute_url,
-                )
+                ))
             }
         }
     }
+
+    await Promise.allSettled(promises)
 
     db.transaction(db => {
         db.update(Company)
