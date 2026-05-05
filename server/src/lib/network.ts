@@ -49,15 +49,16 @@ export async function fetch2(
             return res
         }
 
-        const next = new URL(res.headers.get('location')!, current)
-
-        if (!allowRedirect(next)) {
-            await res.body?.cancel()
-            throw new BlockedHostError(`Blocked redirect to ${next.hostname}`)
+        try {
+            const next = new URL(res.headers.get('location')!, current)
+            if(!allowRedirect(next)) {
+                throw new BlockedHostError(`Blocked redirect to ${next.hostname}`)
+            }
+            current = next
         }
-
-        await res.body?.cancel()
-        current = next
+        finally {
+            await res.body?.cancel().catch(() => {})
+        }
     }
     throw new Error('Too many redirects')
 }
