@@ -86,7 +86,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
         const tiersCounts = U.selectCompanies(
             [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
-            [0.5, 0.25, 0.25],
+            [0.85, 0.1, 0.05],
             quota,
         )
         desiredCompaniesToCheck.length = tiersCounts[0]
