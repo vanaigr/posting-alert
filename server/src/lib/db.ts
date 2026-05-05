@@ -15,7 +15,7 @@ export const aJob = sqliteTable('ashbyhq_job', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
     toFetch: integer('to_fetch').notNull(),
-    shortInfo: text('short_info'),
+    shortInfo: text('short_info').notNull(),
     longInfo: text('long_info'),
     fetchedEpochMs: integer('fetched_epoch_ms'),
 })
@@ -34,7 +34,7 @@ export const lJob = sqliteTable('lever_job', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
-    info: text('info'),
+    info: text('info').notNull(),
 })
 
 export const gCompany = sqliteTable('greenhouse_company', {
@@ -78,7 +78,7 @@ export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
         const version = dbVersion(tx)
         if (version === 2) {
-            tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT NOT NULL`)
             tx.run(sql`ALTER TABLE job ADD COLUMN long_info TEXT`)
             tx.run(sql`PRAGMA user_version = 3`)
         }
@@ -124,7 +124,7 @@ export function migrate(db: BetterSQLite3Database) {
                 id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
-                info TEXT
+                info TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 7`)
         }
