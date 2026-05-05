@@ -241,6 +241,7 @@ async function requestCompany(log: L.Log, companyName: string) {
         }
 
         if(response.status === 404) {
+            await response.text().catch(err => err)
             log.E('Not found')
             return U.status('not-found')
         }
