@@ -185,13 +185,14 @@ function checkCompany(
             if(Tiers.isJobDesired(job.title, undefined) && Tiers.isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
+                const ago = U.millisecToDurationString(Date.now() - (company.checkedEpochMs ?? 0))
+
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     db,
                     job.title + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
-                        // TODO: ashby should have a date field, it's not accurate but better than nothing
-                        + `Ashby ${tier}: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
+                        + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(company.name)}/${encodeURIComponent(job.id)}`
                 )
             }
         }

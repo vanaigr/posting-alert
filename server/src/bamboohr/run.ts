@@ -217,12 +217,14 @@ async function checkCompany(
                     job.atsLocation.country,
                 ].filter(it => it !== null).join(', ')
 
+                const ago = U.millisecToDurationString(Date.now() - (company.checkedEpochMs ?? 0))
+
                 U.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     db,
                     job.jobOpeningName + ' @ ' + company.name + '\n'
                         + workplaceType + ': ' + location + '\n'
-                        + `Bamboo ${tier}: ` + `https://${company.name}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+                        + `Bamboo ${tier} < ${ago} ago: ` + `https://${company.name}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
                 )
             }
         }
