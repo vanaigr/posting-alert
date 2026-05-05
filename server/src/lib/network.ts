@@ -1,4 +1,4 @@
-import { Pool, type Dispatcher } from 'undici'
+import { Pool, type Dispatcher, type RequestInit, fetch as undiciFetch } from 'undici'
 
 export type Connection = {
     origin: string | URL
@@ -24,3 +24,41 @@ export function fetch(
 ): Promise<Dispatcher.ResponseData> {
     return conn.client.request({ ...options, origin: conn.origin })
 }
+
+export class BlockedHostError extends Error { constructor(message: string) { super(message) } }
+
+export async function fetch2(
+    {
+        url,
+        allowRedirect,
+        maxRedirects,
+        ...rest
+    } : {
+        url: URL | string
+        allowRedirect: (url: URL) => boolean
+        maxRedirects?: number
+    } & RequestInit
+) {
+    maxRedirects ??= 10
+    let current = new URL(url)
+
+    for(let i = 0; i <= maxRedirects; i++) {
+        const res = await undiciFetch(current, { ...rest, redirect: 'manual' })
+
+        if(res.status < 300 || res.status >= 400 || !res.headers.has('location')) {
+            return res
+        }
+
+        const next = new URL(res.headers.get('location')!, current)
+
+        if (!allowRedirect(next)) {
+            await res.body?.cancel()
+            throw new BlockedHostError(`Blocked redirect to ${next.hostname}`)
+        }
+
+        await res.body?.cancel()
+        current = next
+    }
+    throw new Error('Too many redirects')
+}
+

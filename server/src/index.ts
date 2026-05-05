@@ -6,6 +6,7 @@ import * as L from './lib/log.ts'
 import * as Ashbyhq from './ashbyhq/run.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
+import * as Bamboohr from './bamboohr/run.ts'
 
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
@@ -14,9 +15,10 @@ async function main() {
     Db.migrate(db)
 
     await Promise.race([
-        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        Lever.run(db, mainLog.addedCtx('lever')),
-        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
+        //Lever.run(db, mainLog.addedCtx('lever')),
+        //Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

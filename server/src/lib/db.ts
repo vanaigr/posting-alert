@@ -1,6 +1,6 @@
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { sql } from 'drizzle-orm'
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
 
 import Database from 'better-sqlite3'
 import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core'
@@ -49,6 +49,25 @@ export const gJob = sqliteTable('greenhouse_job', {
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
     info: text('info').notNull(),
 })
+
+export const bamboohrCompany = sqliteTable('bamboohr_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+})
+
+export const bamboohrJob = sqliteTable(
+    'bamboohr_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ]
+)
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
@@ -165,6 +184,26 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`CREATE INDEX lever_company_exists_checked_idx ON lever_company("exists", checked_epoch_ms)`)
             tx.run(sql`CREATE INDEX greenhouse_company_exists_checked_idx ON greenhouse_company("exists", checked_epoch_ms)`)
             tx.run(sql`PRAGMA user_version = 9`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 9) {
+            tx.run(sql`CREATE TABLE bamboohr_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER
+            )`)
+            tx.run(sql`CREATE TABLE bamboohr_job (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`CREATE INDEX bamboohr_company_exists_checked_idx ON bamboohr_company("exists", checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 10`)
         }
     })
 }
