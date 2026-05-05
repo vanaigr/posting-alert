@@ -35,7 +35,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
     }, 30 * 60 * 1000)
 
-    const connection = N.createConnection('https://boards-api.greenhouse.io', { connections: 10, pipelining: 5 })
+    const connection = N.createConnection('https://boards-api.greenhouse.io', { connections: 30 })
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
