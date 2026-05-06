@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
@@ -5,7 +7,6 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
-import { populate } from './populate.ts'
 import * as Tiers from './tier.ts'
 import * as N from '../lib/network.ts'
 
@@ -14,8 +15,21 @@ const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 const quota = 5
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    populate(db)
-    mainLog.I('Populated companies')
+    ;(() => {
+        const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
+
+        for(let i = 0; i < companyNames.length; i += 3000) {
+            const toInsert = companyNames
+                .slice(i, i + 3000)
+                .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
+
+            db.insert(Company)
+                .values(toInsert)
+                .onConflictDoNothing()
+                .execute()
+        }
+        mainLog.I('Populated companies')
+    })()
 
     const companiesInProcess = new Set<string>()
     const jobsInProcess = new Set<string>()

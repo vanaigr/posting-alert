@@ -19,10 +19,16 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     ;(() => {
         const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
 
-        db.insert(Company)
-            .values(companyNames.map(it => ({ name: it, checkedEpochMs: null, exists: null })))
-            .onConflictDoNothing()
-            .execute()
+        for(let i = 0; i < companyNames.length; i += 3000) {
+            const toInsert = companyNames
+                .slice(i, i + 3000)
+                .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
+
+            db.insert(Company)
+                .values(toInsert)
+                .onConflictDoNothing()
+                .execute()
+        }
         mainLog.I('Populated companies')
     })()
 

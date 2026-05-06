@@ -19,9 +19,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     ;(() => {
         const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
 
-        for(let i = 0; i < companyNames.length; i += 5000) {
+        for(let i = 0; i < companyNames.length; i += 3000) {
             const toInsert = companyNames
-                .slice(i, i + 5000)
+                .slice(i, i + 3000)
                 .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
 
             db.insert(Company)
