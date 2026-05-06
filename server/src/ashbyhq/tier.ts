@@ -44,6 +44,7 @@ export function calculateTier(
     return hasRelevantLocation ? 2 : 3
 }
 
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
 const titleRegex = /(engineer|developer|programmer)/i
 export function isJobRelevant(title: string) {
     return titleRegex.test(title)
@@ -51,6 +52,7 @@ export function isJobRelevant(title: string) {
             /(site reliability engineer|sales engineer|solution engineer)/i.test(title)
         )
 }
+
 export function isJobDesired(title: string, description: string | undefined) {
     const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
         || /\b(UX)\b/.test(title)
@@ -69,6 +71,7 @@ export function getJobLocations(job: any) {
 }
 // Unfortunately ashbyhq does not give a way to get job description in 1 request with job list (and I don't want to half our throughput),
 // so we don't have the JD, and have to be more lenient.
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
 export function isLocationRelevant(job: any) {
     return getJobLocations(job).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)

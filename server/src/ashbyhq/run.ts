@@ -21,7 +21,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const jobsInProcess = new Set<string>()
     let rateLimit = false
 
-    U.evaluateTiers(db, Company, Job, Tiers.calculateTier)
+    U.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
 
     const connection = N.createConnection('https://jobs.ashbyhq.com', { connections: 1 })
 

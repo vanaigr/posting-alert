@@ -189,6 +189,7 @@ export const bannedCompanies = [
 ]
 
 export function evaluateTiers<C extends { name: string }, J extends { companyName: string }>(
+    log: L.Log,
     db: BetterSQLite3Database,
     Company: any,
     Job: any,
@@ -196,6 +197,8 @@ export function evaluateTiers<C extends { name: string }, J extends { companyNam
 ) {
     const tierZero = db.select().from(Company).where(D.eq(Company.tier, 0)).all() as C[]
     if(tierZero.length === 0) return
+
+    log.I('Recalculating tier for ', [tierZero.length], ' companies')
 
     const jobsByCompany = new Map<string, J[]>()
     // NOTE: this function is intended to be invoked when tier'ing changes and all companies
@@ -221,6 +224,8 @@ export function evaluateTiers<C extends { name: string }, J extends { companyNam
         if(tier2.length > 0) tx.update(Company).set({ tier: 2 }).where(D.inArray(Company.name, tier2)).run()
         if(tier3.length > 0) tx.update(Company).set({ tier: 3 }).where(D.inArray(Company.name, tier3)).run()
     })
+
+    log.I([tier1.length], ', ', [tier2.length], ', ', [tier3.length])
 }
 
 export function getOvernightInfo() {

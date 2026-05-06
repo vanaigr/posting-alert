@@ -29,7 +29,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
-    U.evaluateTiers(db, Company, Job, calculateTier)
+    U.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const connection = N.createConnection('https://jobs.lever.co', { connections: 30 })
 
@@ -303,6 +303,7 @@ function calculateTier(
     return hasRelevantLocation ? 2 : 3
 }
 
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
 function isLocationRelevant(info: JobInfo) {
     return getLocations(info).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
@@ -315,6 +316,7 @@ function isLocationRelevant(info: JobInfo) {
         return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
     })
 }
+
 // NOTE: assumes info.descriptionPlain exists
 function isLocationDesired(info: JobInfo) {
     return getLocations(info).some(location => {

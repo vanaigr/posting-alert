@@ -38,7 +38,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
     const connection = new Agent({}).compose(interceptors.dns())
 
-    U.evaluateTiers(db, Company, Job, calculateTier)
+    U.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -418,6 +418,7 @@ function calculateTier(
     return hasRelevantLocation ? 2 : 3
 }
 
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
 function isLocationRelevant(info: FetchJob) {
     const cityState = (info.atsLocation.city || info.location.city || '')
         + ', ' + (info.atsLocation.state || info.location.state || '')
@@ -436,6 +437,7 @@ function isLocationRelevant(info: FetchJob) {
 
     return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
+
 function isLocationDesired(info: FetchJob) {
     const cityState = (info.atsLocation.city || info.location.city || '')
         + ', ' + (info.atsLocation.state || info.location.state || '')

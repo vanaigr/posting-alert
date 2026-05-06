@@ -29,7 +29,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
-    U.evaluateTiers(db, Company, Job, calculateTier)
+    U.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const connection = N.createConnection('https://boards-api.greenhouse.io', { connections: 30 })
 
@@ -266,6 +266,7 @@ type Job = {
     offices?: { id: number; name: string; location: string; parent_id: number | null; child_ids: number[] }[]
 }
 
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
 function isLocationRelevant(job: { location: { name: string }, content?: string }) {
     const location = job.location.name
     const content = job.content
