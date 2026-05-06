@@ -9,8 +9,17 @@ import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
 
+let mainLog: L.Log | undefined
+
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
+
+    process.on('uncaughtException', (err, origin) => {
+        mainLog.E('Uncaught exception from ', [origin], ': ', [err])
+    })
+    process.on('unhandledRejection', (reason, promise) => {
+        mainLog.E('Unhandled rejection from ', [promise], ': ', [reason])
+    })
 
     const db = drizzle(new Database(process.env.DB_PATH!))
     Db.migrate(db)
@@ -26,5 +35,15 @@ async function main() {
     mainLog.W('A sub-task exited. Restarting')
 }
 
-await main()
+try {
+    await main()
+}
+catch(err) {
+    if(mainLog) mainLog.E([err])
+    else console.error(err)
+}
+finally {
+    await mainLog?.flushMessages()
+}
+
 process.exit(0)
