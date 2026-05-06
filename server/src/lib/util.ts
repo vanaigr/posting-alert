@@ -187,3 +187,38 @@ export function millisecToDurationString(ms: number) {
 export const bannedCompanies = [
     'jobgether',
 ]
+
+export function evaluateTiers<C extends { name: string }, J extends { companyName: string }>(
+    db: BetterSQLite3Database,
+    Company: any,
+    Job: any,
+    calculateTier: (company: C, jobs: J[]) => number,
+) {
+    const tierZero = db.select().from(Company).where(D.eq(Company.tier, 0)).all() as C[]
+    if(tierZero.length === 0) return
+
+    const jobsByCompany = new Map<string, J[]>()
+    // NOTE: this function is intended to be invoked when tier'ing changes and all companies
+    // need to be reevaluated, so querying everything is fine.
+    for(const job of db.select().from(Job).all() as J[]) {
+        const arr = jobsByCompany.get(job.companyName) ?? []
+        arr.push(job)
+        jobsByCompany.set(job.companyName, arr)
+    }
+
+    const tier1: string[] = []
+    const tier2: string[] = []
+    const tier3: string[] = []
+    for(const company of tierZero) {
+        const tier = calculateTier(company, jobsByCompany.get(company.name) ?? [])
+        if(tier === 1) tier1.push(company.name)
+        else if(tier === 2) tier2.push(company.name)
+        else tier3.push(company.name)
+    }
+
+    db.transaction(tx => {
+        if(tier1.length > 0) tx.update(Company).set({ tier: 1 }).where(D.inArray(Company.name, tier1)).run()
+        if(tier2.length > 0) tx.update(Company).set({ tier: 2 }).where(D.inArray(Company.name, tier2)).run()
+        if(tier3.length > 0) tx.update(Company).set({ tier: 3 }).where(D.inArray(Company.name, tier3)).run()
+    })
+}

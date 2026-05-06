@@ -19,13 +19,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const jobsInProcess = new Set<string>()
     let rateLimit = false
 
-    let tiers: Tiers.Tiers = Tiers.calculateTiers(db)
-    mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
-    setInterval(() => {
-        mainLog.I('Updating company tiers')
-        tiers = Tiers.calculateTiers(db)
-        mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
-    }, 30 * 60 * 1000)
+    U.evaluateTiers(db, Company, Job, Tiers.calculateTier)
 
     const connection = N.createConnection('https://jobs.ashbyhq.com', { connections: 1 })
 
@@ -48,7 +42,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                     D.isNull(Company.exists),
                     D.and(
                         D.eq(Company.exists, 1),
-                        D.inArray(Company.name, tiers.desiredCompanies),
+                        D.eq(Company.tier, 1),
                     ),
                 ),
                 D.not(D.inArray(Company.name, companiesToSkip)),
@@ -59,7 +53,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
-                D.inArray(Company.name, tiers.relevantCompanies),
+                D.eq(Company.tier, 2),
                 D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
@@ -68,8 +62,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
-                D.not(D.inArray(Company.name, tiers.desiredCompanies)),
-                D.not(D.inArray(Company.name, tiers.relevantCompanies)),
+                D.eq(Company.tier, 3),
                 D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)

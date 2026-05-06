@@ -9,6 +9,7 @@ export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    tier: integer('tier').notNull().default(0),
 })
 
 export const aJob = sqliteTable('ashbyhq_job', {
@@ -34,6 +35,7 @@ export const lCompany = sqliteTable('lever_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    tier: integer('tier').notNull().default(0),
 })
 
 export const lJob = sqliteTable('lever_job', {
@@ -47,6 +49,7 @@ export const gCompany = sqliteTable('greenhouse_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    tier: integer('tier').notNull().default(0),
 })
 
 export const gJob = sqliteTable('greenhouse_job', {
@@ -61,6 +64,7 @@ export const bamboohrCompany = sqliteTable('bamboohr_company', {
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
     failCount: integer('fail_count').notNull().default(0),
+    tier: integer('tier').notNull().default(0),
 })
 
 export const bamboohrJob = sqliteTable(
@@ -277,6 +281,21 @@ PRAGMA mmap_size = 268435456;
                 company_tier TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 14`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 14) {
+            tx.run(sql`ALTER TABLE ashbyhq_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE lever_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE greenhouse_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`CREATE INDEX ashbyhq_company_tier_idx ON ashbyhq_company(tier)`)
+            tx.run(sql`CREATE INDEX lever_company_tier_idx ON lever_company(tier)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_tier_idx ON greenhouse_company(tier)`)
+            tx.run(sql`CREATE INDEX bamboohr_company_tier_idx ON bamboohr_company(tier)`)
+            tx.run(sql`PRAGMA user_version = 15`)
         }
     })
 }

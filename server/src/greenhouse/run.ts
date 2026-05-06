@@ -27,13 +27,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
-    let tiers: Tiers = calculateTiers(db)
-    mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
-    setInterval(() => {
-        mainLog.I('Updating company tiers')
-        tiers = calculateTiers(db)
-        mainLog.I('Tiers: ', [tiers.desiredCompanies.length], ', ', [tiers.relevantCompanies.length])
-    }, 30 * 60 * 1000)
+    U.evaluateTiers(db, Company, Job, calculateTier)
 
     const connection = N.createConnection('https://boards-api.greenhouse.io', { connections: 30 })
 
@@ -56,7 +50,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                     D.isNull(Company.exists),
                     D.and(
                         D.eq(Company.exists, 1),
-                        D.inArray(Company.name, tiers.desiredCompanies),
+                        D.eq(Company.tier, 1),
                     ),
                 ),
                 D.not(D.inArray(Company.name, companiesToSkip)),
@@ -67,7 +61,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const relevantCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
-                D.inArray(Company.name, tiers.relevantCompanies),
+                D.eq(Company.tier, 2),
                 D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
@@ -76,8 +70,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const otherCompaniesToCheck = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
-                D.not(D.inArray(Company.name, tiers.desiredCompanies)),
-                D.not(D.inArray(Company.name, tiers.relevantCompanies)),
+                D.eq(Company.tier, 3),
                 D.not(D.inArray(Company.name, companiesToSkip)),
             ))
             .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
@@ -301,38 +294,17 @@ function isLocationDesired(job: { location: { name: string }, content?: string }
     return isRemoteInUs || isRemoteWorldwide || isMyLocal
 }
 
-type Tiers = {
-    desiredCompanies: string[]
-    relevantCompanies: string[]
-}
-function calculateTiers(db: BetterSQLite3Database): Tiers {
-    const relevantJobsByCompany = new Map<string, Job[]>()
-
-    for(const job of db.select().from(Job).all()) {
+function calculateTier(
+    _company: D.InferSelectModel<typeof Company>,
+    jobs: D.InferSelectModel<typeof Job>[],
+): number {
+    let hasRelevantLocation = false
+    for(const job of jobs) {
         const info: Job | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
         if(!isLocationRelevant(info)) continue
-
-        const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
-        jobs.push(info)
-        relevantJobsByCompany.set(job.companyName, jobs)
+        hasRelevantLocation = true
+        if(AshbyTiers.isJobRelevant(info.title)) return 1
     }
-
-    const desiredCompanies: string[] = []
-    const relevantCompanies: string[] = []
-
-    for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => AshbyTiers.isJobRelevant(it.title))
-        if(desired !== undefined) {
-            desiredCompanies.push(companyName)
-        }
-        else {
-            relevantCompanies.push(companyName)
-        }
-    }
-
-    return {
-        desiredCompanies,
-        relevantCompanies,
-    }
+    return hasRelevantLocation ? 2 : 3
 }

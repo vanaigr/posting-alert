@@ -3,7 +3,6 @@ import path from 'node:path'
 import util from 'node:util'
 import 'dotenv/config'
 import * as D from 'drizzle-orm'
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from '../lib/db.ts'
 import * as U from '../lib/util.ts'
@@ -30,41 +29,19 @@ export const citiesStatesRegex2 = new RegExp(
         + ')\\b',
 )
 
-export type Tiers = {
-    desiredCompanies: string[]
-    relevantCompanies: string[]
-}
-
-export function calculateTiers(db: BetterSQLite3Database) {
-    const relevantJobsByCompany = new Map<string, any[]>()
-
-    for(const job of db.select().from(Job).all()) {
+export function calculateTier(
+    _company: D.InferSelectModel<typeof Company>,
+    jobs: D.InferSelectModel<typeof Job>[],
+): number {
+    let hasRelevantLocation = false
+    for(const job of jobs) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
         if(!infoRaw) continue
         if(!isLocationRelevant(infoRaw)) continue
-
-        const jobs = (relevantJobsByCompany.get(job.companyName) ?? [])
-        jobs.push(infoRaw)
-        relevantJobsByCompany.set(job.companyName, jobs)
+        hasRelevantLocation = true
+        if(isJobRelevant(infoRaw.title)) return 1
     }
-
-    const desiredCompanies: string[] = []
-    const relevantCompanies: string[] = []
-
-    for(const [companyName, relevantJobs] of relevantJobsByCompany) {
-        const desired = relevantJobs.find(it => isJobRelevant(it.title))
-        if(desired !== undefined) {
-            desiredCompanies.push(companyName)
-        }
-        else {
-            relevantCompanies.push(companyName)
-        }
-    }
-
-    return {
-        desiredCompanies,
-        relevantCompanies,
-    }
+    return hasRelevantLocation ? 2 : 3
 }
 
 const titleRegex = /(engineer|developer|programmer)/i
