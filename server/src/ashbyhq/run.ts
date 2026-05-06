@@ -85,7 +85,6 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         relevantCompaniesToCheck.length = tiersCounts[1]
         otherCompaniesToCheck.length = tiersCounts[2]
 
-        const jobsToSkip = [...jobsInProcess]
         const jobsToCheckDetails = db.select({
             id: FetchJobDetails.id,
             companyName: Job.companyName,
@@ -97,7 +96,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         })
             .from(FetchJobDetails)
             .innerJoin(Job, D.eq(FetchJobDetails.id, Job.id))
-            .where(D.not(D.inArray(FetchJobDetails.id, jobsToSkip)))
+            .where(D.not(D.inArray(FetchJobDetails.id, [...jobsInProcess])))
             .orderBy(D.asc(FetchJobDetails.addedAt))
             .limit(5)
             .all()

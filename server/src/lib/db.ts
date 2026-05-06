@@ -70,11 +70,21 @@ export const bamboohrJob = sqliteTable(
         id: text('id').notNull(),
         fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
         info: text('info').notNull(),
+        longInfo: text('long_info'),
     },
     table => [
         primaryKey({ columns: [table.companyName, table.id] }),
-    ]
+    ],
 )
+
+export const bamboohrFetchJobDetails = sqliteTable('bamboohr_fetch_job_details', {
+    uniqueId: text('unique_id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
+})
 
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
@@ -251,6 +261,22 @@ PRAGMA mmap_size = 268435456;
                 company_tier TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 13`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 13) {
+            tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN long_info TEXT`)
+            tx.run(sql`CREATE TABLE bamboohr_fetch_job_details (
+                unique_id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                added_at INTEGER NOT NULL,
+                job_posted_after INTEGER NOT NULL,
+                company_tier TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 14`)
         }
     })
 }

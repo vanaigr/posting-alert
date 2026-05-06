@@ -8,11 +8,10 @@ import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
-import * as N from '../lib/network.ts'
 import * as Db from '../lib/db.ts'
 import * as AshbyTiers from '../ashbyhq/tier.ts'
 
-const { bamboohrCompany: Company, bamboohrJob: Job } = Db
+const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     ;(() => {
@@ -32,6 +31,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     })()
 
     const companiesInProcess = new Set<string>()
+    const jobsInProgress = new Set<string>()
     let rateLimit = false
 
     const connection = new Agent({}).compose(interceptors.dns())
@@ -91,6 +91,14 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .limit(quota)
             .all()
 
+        const jobsToCheckDetails = db.select()
+            .from(FetchJobDetails)
+            .innerJoin(Job, D.and(D.eq(FetchJobDetails.companyName, Job.companyName), D.eq(FetchJobDetails.id, Job.id)))
+            .where(D.not(D.inArray(FetchJobDetails.uniqueId, [...jobsInProgress])))
+            .orderBy(D.asc(FetchJobDetails.addedAt))
+            .limit(5)
+            .all()
+
         const tiersCounts = U.selectCompanies(
             [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
             [0.85, 0.1, 0.05],
@@ -105,6 +113,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [desiredCompaniesToCheck.length], ', ',
             [relevantCompaniesToCheck.length], ', ',
             [otherCompaniesToCheck.length], ', ',
+            'job details: ', [jobsToCheckDetails.length],
         )
 
         const currentTime = Date.now()
@@ -128,6 +137,22 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         for(const it of relevantCompaniesToCheck) handleCompanny(it, 'II')
         for(const it of otherCompaniesToCheck) handleCompanny(it, 'III')
 
+        for(const { bamboohr_fetch_job_details, bamboohr_job } of jobsToCheckDetails) {
+            const log = mainLog.addedCtx([bamboohr_fetch_job_details.companyName], ' job ', [bamboohr_fetch_job_details.id])
+            ;(async() => {
+                try {
+                    jobsInProgress.add(bamboohr_fetch_job_details.uniqueId)
+                    await processJobDetail(db, log, connection, bamboohr_fetch_job_details, bamboohr_job)
+                }
+                catch(err) {
+                    log.E([err])
+                }
+                finally {
+                    jobsInProgress.delete(bamboohr_fetch_job_details.uniqueId)
+                }
+            })()
+        }
+
         await U.delay(nextTick)
     }
 }
@@ -140,7 +165,7 @@ async function checkCompany(
     company: D.InferSelectModel<typeof Company>,
     tier: string,
 ) {
-    const result = await requestCompany(log, connection, company.name)
+    const result = await request<{ result: FetchJob[] }>(log, connection, `https://${company.name}.bamboohr.com/careers/list`)
     if(result.status === 'rate-limit') return result
 
     db.update(Company)
@@ -187,7 +212,7 @@ async function checkCompany(
     )
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
-    const promises: Promise<void>[] = []
+    const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const job of result.data.result) {
         if(existingJobs.has(job.id)) continue
 
@@ -196,42 +221,24 @@ async function checkCompany(
             id: job.id,
             fetchedEpochMs: currentTime,
             info: JSON.stringify(job satisfies FetchJob),
+            longInfo: null,
         })
 
         if(!initial) {
             log.I('New job ', [job.id])
             if(AshbyTiers.isJobDesired(job.jobOpeningName, undefined) && isLocationDesired(job)) {
-                log.I('Job ', job.id, ' is relevant!')
-
-                const workplaceType = (() => {
-                    if(job.isRemote) return 'Remote'
-                    if(job.locationType === '0') return 'On-site'
-                    if(job.locationType === '1') return 'Remote'
-                    if(job.locationType === '2') return 'Hybrid'
-                    return 'error ' + job.locationType
-                })()
-
-                const location = [
-                    job.atsLocation.city || job.location.city,
-                    job.atsLocation.state || job.location.state,
-                    job.atsLocation.province,
-                    job.atsLocation.country,
-                ].filter(it => it !== null).join(', ')
-
-                const ago = U.millisecToDurationString(Date.now() - (company.checkedEpochMs ?? 0))
-
-                promises.push(U.sendMessage(
-                    log.addedCtx('job ', [job.id]),
-                    db,
-                    job.jobOpeningName + ' @ ' + company.name + '\n'
-                        + workplaceType + ': ' + location + '\n'
-                        + `Bamboo ${tier} < ${ago} ago: ` + `https://${company.name}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
-                ))
+                log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
+                toEnqueueDetails.push({
+                    uniqueId: U.getHash(company.name, job.id),
+                    id: job.id,
+                    companyName: company.name,
+                    addedAt: currentTime,
+                    jobPostedAfter: company.checkedEpochMs ?? 0,
+                    companyTier: tier,
+                })
             }
         }
     }
-
-    await Promise.allSettled(promises)
 
     db.transaction(db => {
         db.update(Company)
@@ -240,6 +247,9 @@ async function checkCompany(
             .run()
         if(toInsert.length > 0) {
             db.insert(Job).values(toInsert).run()
+        }
+        if(toEnqueueDetails.length > 0) {
+            db.insert(FetchJobDetails).values(toEnqueueDetails).run()
         }
     })
 
@@ -253,9 +263,88 @@ async function checkCompany(
     return U.status('ok')
 }
 
-async function requestCompany(log: L.Log, connection: Dispatcher, companyName: string) {
+async function processJobDetail(
+    db: BetterSQLite3Database,
+    log: L.Log,
+    dispatcher: Dispatcher,
+    fetchDetails: D.InferSelectModel<typeof FetchJobDetails>,
+    dbJob: D.InferSelectModel<typeof Job>,
+) {
+    const job = JSON.parse(dbJob.info) as FetchJob
+
+    if(dbJob.longInfo === null) {
+        log.I('Fetching job info')
+        const responseResult = await request<FetchLongInfo>(log, dispatcher, `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(dbJob.id)}/detail`)
+        if(responseResult.status === 'ok') {
+            const longInfo = JSON.stringify({
+                description: responseResult.data.result.jobOpening.description,
+            } satisfies LongInfo)
+            db.update(Job).set({ longInfo }).where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id))).run()
+            dbJob.longInfo = longInfo
+        }
+        else {
+            // TODO: report rate-limit up
+        }
+    }
+
+    let shouldSend = false
+    if(!dbJob.longInfo) {
+        log.W('Could not get job info. Considering relevant')
+        shouldSend = true
+    }
+    else {
+        const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
+        if(AshbyTiers.isJobDesired(job.jobOpeningName, longInfo.description) && isLocationDesired(job)) {
+            log.I('Job is still relevant after detail check')
+            shouldSend = true
+        }
+    }
+
+    if(shouldSend) {
+        const workplaceType = (() => {
+            if(job.isRemote) return 'Remote'
+            if(job.locationType === '0') return 'On-site'
+            if(job.locationType === '1') return 'Remote'
+            if(job.locationType === '2') return 'Hybrid'
+            return 'error ' + job.locationType
+        })()
+
+        const location = [
+            job.atsLocation.city || job.location.city,
+            job.atsLocation.state || job.location.state,
+            job.atsLocation.province,
+            job.atsLocation.country,
+        ].filter(it => it !== null).join(', ')
+
+        const ago = U.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
+
+        await U.sendMessage(
+            log.addedCtx('job ', [job.id]),
+            db,
+            job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
+                + workplaceType + ': ' + location + '\n'
+                + `Bamboo ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+        )
+    }
+
+    db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.uniqueId, fetchDetails.uniqueId)).run()
+}
+
+type LongInfo = {
+    description: string // html
+}
+
+type FetchLongInfo = {
+    result: {
+        jobOpening: {
+            description: string
+        },
+    }
+}
+
+async function request<R>(log: L.Log, connection: Dispatcher, url: string) {
     try {
-        const response = await undiciFetch(`https://${companyName}.bamboohr.com/careers/list`, {
+        const response = await undiciFetch(url, {
             dispatcher: connection,
         })
         if(response.status === 429) {
@@ -279,7 +368,7 @@ async function requestCompany(log: L.Log, connection: Dispatcher, companyName: s
             return U.status('not-found')
         }
 
-        const json = await response.json() as { result: FetchJob[] }
+        const json = await response.json() as R
         return U.result('ok', json)
     }
     catch(err) {
