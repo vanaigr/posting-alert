@@ -278,7 +278,7 @@ async function processJobDetail(
     if(dbJob.longInfo === null) {
         const url = `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(dbJob.id)}/detail`
         log.I('Fetching job info: ', url/*sic*/)
-        const responseResult = await request<FetchLongInfo>(log, dispatcher, url)
+        const responseResult = await request<FetchLongInfo>(log, undefined, url)
         if(responseResult.status === 'ok') {
             const longInfo = JSON.stringify({
                 description: responseResult.data.result.jobOpening.description,
@@ -349,11 +349,9 @@ type FetchLongInfo = {
     }
 }
 
-async function request<R>(log: L.Log, connection: Dispatcher, url: string) {
+async function request<R>(log: L.Log, connection: Dispatcher | undefined, url: string) {
     try {
-        const response = await undiciFetch(url, {
-            dispatcher: connection,
-        })
+        const response = await undiciFetch(url, { dispatcher: connection })
         if(response.status === 429) {
             log.E('Rate limited')
             await response.text().catch(() => {})
