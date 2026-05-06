@@ -146,14 +146,9 @@ async function trySendMessage(log: L.Log, message: string): Promise<boolean> {
 export async function sendMessage(log: L.Log, db: BetterSQLite3Database, message: string) {
     const originalEpochMs = Date.now()
     const ok = await trySendMessage(log, message)
-    if(ok) return
-
-    try {
+    if(!ok) {
         db.insert(Db.pendingNotification).values({ message, originalEpochMs }).run()
         log.I('Persisted notification for retry')
-    }
-    catch(err) {
-        log.E('Failed to persist pending notification: ', [err])
     }
 }
 
