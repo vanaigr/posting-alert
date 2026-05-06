@@ -56,14 +56,17 @@ export function isJobRelevant(title: string) {
 export function isJobDesired(title: string, description: string | undefined) {
     const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
         || /\b(UX)\b/.test(title)
+    if(ignoreTitle) return false
+
+    if(!isJobRelevant(title)) return false
 
     if(description) {
         const descriptionDesired = /(typescript|type script|reactjs|nodejs)/i.test(description)
             || /(Node|React)/.test(description)
-        return descriptionDesired && !ignoreTitle
+        if(!descriptionDesired) return false
     }
 
-    return isJobRelevant(title) && !ignoreTitle
+    return true
 }
 
 export function getJobLocations(job: any) {
