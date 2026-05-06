@@ -214,13 +214,11 @@ function checkCompany(
 
     const initial = company.exists === null
 
-    const existingJobs = new Set(
-        db.select()
-            .from(Job)
-            .where(D.eq(Job.companyName, company.name))
-            .all()
-            .map(it => it.id)
-    )
+    const existingJobsRows = db.select()
+        .from(Job)
+        .where(D.eq(Job.companyName, company.name))
+        .all()
+    const existingJobs = new Set(existingJobsRows.map(it => it.id))
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
@@ -252,9 +250,13 @@ function checkCompany(
         }
     }
 
+    const newTier = toInsert.length > 0
+        ? Tiers.calculateTier(company, [...existingJobsRows, ...toInsert])
+        : null
+
     db.transaction(db => {
         db.update(Company)
-            .set({ exists: 1 })
+            .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
