@@ -154,7 +154,7 @@ export async function sendMessage(log: L.Log, db: BetterSQLite3Database, message
 
 export async function runPendingNotificationService(db: BetterSQLite3Database, log: L.Log) {
     while(true) {
-        await delay(T.Now.instant().add({ seconds: 30 }))
+        await delay(T.Now.instant().add({ seconds: 10 }))
 
         const rows = db.select().from(Db.pendingNotification).all()
         for(const row of rows) {
