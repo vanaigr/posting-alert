@@ -299,6 +299,9 @@ async function processJobDetail(
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
+        else {
+            log.I('Job is not relevant after detail check')
+        }
     }
 
     if(shouldSend) {
