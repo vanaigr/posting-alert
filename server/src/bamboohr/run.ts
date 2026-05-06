@@ -276,8 +276,9 @@ async function processJobDetail(
     const job = JSON.parse(dbJob.info) as FetchJob
 
     if(dbJob.longInfo === null) {
-        log.I('Fetching job info')
-        const responseResult = await request<FetchLongInfo>(log, dispatcher, `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(dbJob.id)}/detail`)
+        const url = `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(dbJob.id)}/detail`
+        log.I('Fetching job info: ', url/*sic*/)
+        const responseResult = await request<FetchLongInfo>(log, dispatcher, url)
         if(responseResult.status === 'ok') {
             const longInfo = JSON.stringify({
                 description: responseResult.data.result.jobOpening.description,
