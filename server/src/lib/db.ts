@@ -52,7 +52,7 @@ export const gCompany = sqliteTable('greenhouse_company', {
     tier: integer('tier').notNull().default(0),
 })
 
-export const gJob = sqliteTable('greenhouse_job', {
+export const gJob = sqliteTable('greenhouse_job_2', {
     id: text('id').primaryKey(),
     companyName: text('company_name').notNull(),
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
@@ -296,6 +296,26 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`CREATE INDEX greenhouse_company_tier_idx ON greenhouse_company(tier)`)
             tx.run(sql`CREATE INDEX bamboohr_company_tier_idx ON bamboohr_company(tier)`)
             tx.run(sql`PRAGMA user_version = 15`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 15) {
+            tx.run(sql`CREATE TABLE greenhouse_job_2 (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`
+                INSERT INTO greenhouse_job_2(company_name, id, fetched_epoch_ms, info)
+                SELECT company_name, id, fetched_epoch_ms, info FROM greenhouse_job
+            `)
+            tx.run(sql`DROP TABLE greenhouse_job`)
+
+            tx.run(sql`PRAGMA user_version = 16`)
         }
     })
 }
