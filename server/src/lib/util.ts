@@ -222,3 +222,22 @@ export function evaluateTiers<C extends { name: string }, J extends { companyNam
         if(tier3.length > 0) tx.update(Company).set({ tier: 3 }).where(D.inArray(Company.name, tier3)).run()
     })
 }
+
+export function getOvernightInfo() {
+    const now = T.Now.instant()
+
+    const overnightBegin = now
+        .toZonedDateTimeISO(process.env.SEARCH_TIMEZONE!)
+        .with(
+            { hour: 2, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 },
+            { disambiguation: 'earlier' },
+        )
+        .toInstant()
+    const overnightEnd = overnightBegin.add({ hours: 1 })
+
+    return {
+        overnightBegin: overnightBegin.epochMilliseconds,
+        isOvernight: T.Instant.compare(overnightBegin, now) <= 0
+            && T.Instant.compare(now, overnightEnd) < 0,
+    }
+}

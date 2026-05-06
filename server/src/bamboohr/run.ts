@@ -13,6 +13,8 @@ import * as AshbyTiers from '../ashbyhq/tier.ts'
 
 const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
 
+const quota = 5
+
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     ;(() => {
         const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
@@ -49,40 +51,56 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
-        const quota = 5
-        const desiredCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.or(
-                    D.isNull(Company.exists),
-                    D.and(
+        const toCheck = (() => {
+            const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
+
+            const overnightInfo = U.getOvernightInfo()
+            if(overnightInfo.isOvernight) {
+                const other = db.select().from(Company)
+                    .where(D.and(
                         D.eq(Company.exists, 1),
-                        D.eq(Company.tier, 1),
+                        D.eq(Company.tier, 3),
+                        D.not(D.inArray(Company.name, companiesToSkip)),
+                    ))
+                    .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                    .limit(quota)
+                    .all()
+
+                if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
+                    return { desired: [], relevant: [], other }
+                }
+            }
+
+            const desired = db.select().from(Company)
+                .where(D.and(
+                    D.or(
+                        D.isNull(Company.exists),
+                        D.and(
+                            D.eq(Company.exists, 1),
+                            D.eq(Company.tier, 1),
+                        ),
                     ),
-                ),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
-        const relevantCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 2),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
-        const otherCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 3),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
+                    D.not(D.inArray(Company.name, companiesToSkip)),
+                ))
+                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                .limit(quota)
+                .all()
+            const relevant = db.select().from(Company)
+                .where(D.and(
+                    D.eq(Company.exists, 1),
+                    D.eq(Company.tier, 2),
+                    D.not(D.inArray(Company.name, companiesToSkip)),
+                ))
+                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                .limit(quota)
+                .all()
+
+            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.25], quota)
+            desired.length = tiersCounts[0]
+            relevant.length = tiersCounts[1]
+
+            return { desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
+        })()
 
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
@@ -92,21 +110,11 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             .limit(5)
             .all()
 
-        const tiersCounts = U.selectCompanies(
-            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
-            [0.85, 0.1, 0.05],
-            quota,
-        )
-        desiredCompaniesToCheck.length = tiersCounts[0]
-        relevantCompaniesToCheck.length = tiersCounts[1]
-        otherCompaniesToCheck.length = tiersCounts[2]
-
         mainLog.I(
             'Checking: ',
-            [desiredCompaniesToCheck.length], ', ',
-            [relevantCompaniesToCheck.length], ', ',
-            [otherCompaniesToCheck.length], ', ',
-            'job details: ', [jobsToCheckDetails.length],
+            [toCheck.desired.length], ', ',
+            [toCheck.relevant.length], ', ',
+            [toCheck.other.length], ', ',
         )
 
         const currentTime = Date.now()
@@ -126,9 +134,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             }
         }
 
-        for(const it of desiredCompaniesToCheck) handleCompanny(it, 'I')
-        for(const it of relevantCompaniesToCheck) handleCompanny(it, 'II')
-        for(const it of otherCompaniesToCheck) handleCompanny(it, 'III')
+        for(const it of toCheck.desired) handleCompanny(it, 'I')
+        for(const it of toCheck.relevant) handleCompanny(it, 'II')
+        for(const it of toCheck.other) handleCompanny(it, 'III')
 
         for(const { bamboohr_fetch_job_details, bamboohr_job } of jobsToCheckDetails) {
             const log = mainLog.addedCtx([bamboohr_fetch_job_details.companyName], ' job ', [bamboohr_fetch_job_details.id])

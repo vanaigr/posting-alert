@@ -11,6 +11,9 @@ import * as Bamboohr from './bamboohr/run.ts'
 
 let mainLog: L.Log | undefined
 
+// TODO: scan new companies first but keep track on the number of failures and disable if they keep failing
+// I don't need that since I already scanned all the companies for the currently added boards.
+
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
 

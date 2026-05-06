@@ -11,6 +11,8 @@ import * as N from '../lib/network.ts'
 
 const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 
+const quota = 5
+
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     populate(db)
     mainLog.I('Populated companies')
@@ -34,49 +36,57 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
-        const quota = 5
-        const desiredCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.or(
-                    D.isNull(Company.exists),
-                    D.and(
-                        D.eq(Company.exists, 1),
-                        D.eq(Company.tier, 1),
-                    ),
-                ),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
-        const relevantCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 2),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
-        const otherCompaniesToCheck = db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 3),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
 
-        const tiersCounts = U.selectCompanies(
-            [desiredCompaniesToCheck, relevantCompaniesToCheck, otherCompaniesToCheck],
-            [0.5, 0.1, 0.25], // TODO: unbias this based on company counts
-            quota,
-        )
-        desiredCompaniesToCheck.length = tiersCounts[0]
-        relevantCompaniesToCheck.length = tiersCounts[1]
-        otherCompaniesToCheck.length = tiersCounts[2]
+        const toCheck = (() => {
+            const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
+
+            const overnightInfo = U.getOvernightInfo()
+            if(overnightInfo.isOvernight) {
+                const other = db.select().from(Company)
+                    .where(D.and(
+                        D.eq(Company.exists, 1),
+                        D.eq(Company.tier, 3),
+                        D.not(D.inArray(Company.name, companiesToSkip)),
+                    ))
+                    .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                    .limit(quota)
+                    .all()
+
+                if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
+                    return { desired: [], relevant: [], other }
+                }
+            }
+
+            const desired = db.select().from(Company)
+                .where(D.and(
+                    D.or(
+                        D.isNull(Company.exists),
+                        D.and(
+                            D.eq(Company.exists, 1),
+                            D.eq(Company.tier, 1),
+                        ),
+                    ),
+                    D.not(D.inArray(Company.name, companiesToSkip)),
+                ))
+                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                .limit(quota)
+                .all()
+            const relevant = db.select().from(Company)
+                .where(D.and(
+                    D.eq(Company.exists, 1),
+                    D.eq(Company.tier, 2),
+                    D.not(D.inArray(Company.name, companiesToSkip)),
+                ))
+                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                .limit(quota)
+                .all()
+
+            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.1], quota)
+            desired.length = tiersCounts[0]
+            relevant.length = tiersCounts[1]
+
+            return { desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
+        })()
 
         const jobsToCheckDetails = db.select({
             id: FetchJobDetails.id,
@@ -96,18 +106,18 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
         mainLog.I(
             'Checking: ',
-            [desiredCompaniesToCheck.length], ', ',
-            [relevantCompaniesToCheck.length], ', ',
-            [otherCompaniesToCheck.length], ', ',
+            [toCheck.desired.length], ', ',
+            [toCheck.relevant.length], ', ',
+            [toCheck.other.length], ', ',
             'job details: ', [jobsToCheckDetails.length],
         )
 
         ;(async() => {
-            const companiesToCheck = [...desiredCompaniesToCheck, ...relevantCompaniesToCheck, ...otherCompaniesToCheck]
+            const companiesToCheck = [...toCheck.desired, ...toCheck.relevant, ...toCheck.other]
             const tiersByIndex: string[] = [
-                ...desiredCompaniesToCheck.map(() => 'I'),
-                ...relevantCompaniesToCheck.map(() => 'II'),
-                ...otherCompaniesToCheck.map(() => 'III'),
+                ...toCheck.desired.map(() => 'I'),
+                ...toCheck.relevant.map(() => 'II'),
+                ...toCheck.other.map(() => 'III'),
             ]
 
             try {
