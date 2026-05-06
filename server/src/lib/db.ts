@@ -318,6 +318,30 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`PRAGMA user_version = 16`)
         }
     })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 16) {
+            // outdated (now it filters by tier as well)
+            tx.run(sql`DROP INDEX ashbyhq_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX lever_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX greenhouse_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX bamboohr_company_exists_checked_idx`)
+            // only needed once at startup, and if it has stats on "exists" cardinality
+            // it should be able to use the new index.
+            tx.run(sql`DROP INDEX ashbyhq_company_tier_idx`)
+            tx.run(sql`DROP INDEX lever_company_tier_idx`)
+            tx.run(sql`DROP INDEX greenhouse_company_tier_idx`)
+            tx.run(sql`DROP INDEX bamboohr_company_tier_idx`)
+
+            tx.run(sql`CREATE INDEX ashbyhq_company_exists_tier_checked_idx ON ashbyhq_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX lever_company_exists_tier_checked_idx ON lever_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_exists_tier_checked_idx ON greenhouse_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX bamboohr_company_exists_tier_checked_idx ON bamboohr_company("exists", tier, checked_epoch_ms)`)
+
+            tx.run(sql`PRAGMA user_version = 17`)
+        }
+    })
 }
 
 
