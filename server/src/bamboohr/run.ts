@@ -418,7 +418,7 @@ function calculateTier(
 }
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
-function isLocationRelevant(info: FetchJob) {
+export function isLocationRelevant(info: FetchJob) {
     const cityState = (info.atsLocation.city || info.location.city || '')
         + ', ' + (info.atsLocation.state || info.location.state || '')
 
@@ -437,7 +437,7 @@ function isLocationRelevant(info: FetchJob) {
     return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 
-function isLocationDesired(info: FetchJob) {
+export function isLocationDesired(info: FetchJob) {
     const cityState = (info.atsLocation.city || info.location.city || '')
         + ', ' + (info.atsLocation.state || info.location.state || '')
 

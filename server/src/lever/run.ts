@@ -265,7 +265,7 @@ async function requestCompany(log: L.Log, connection: N.Connection, companyName:
     }
 }
 
-type FetchJob = {
+type type FetchJob = {
     additionalPlain: string
     additional: string
     categories: {
@@ -310,7 +310,7 @@ function calculateTier(
 }
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
-function isLocationRelevant(info: JobInfo) {
+export function isLocationRelevant(info: JobInfo) {
     return getLocations(info).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null
@@ -324,7 +324,7 @@ function isLocationRelevant(info: JobInfo) {
 }
 
 // NOTE: assumes info.descriptionPlain exists
-function isLocationDesired(info: JobInfo) {
+export function isLocationDesired(info: JobInfo) {
     return getLocations(info).some(location => {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
             || info.country === 'US' || info.country === null

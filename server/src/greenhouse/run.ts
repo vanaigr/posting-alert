@@ -273,7 +273,7 @@ type Job = {
 }
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
-function isLocationRelevant(job: { location: { name: string }, content?: string }) {
+export function isLocationRelevant(job: { location: { name: string }, content?: string }) {
     const location = job.location.name
     const content = job.content
     if(!location) {
@@ -289,7 +289,7 @@ function isLocationRelevant(job: { location: { name: string }, content?: string 
     return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 
-function isLocationDesired(job: { location: { name: string }, content?: string }) {
+export function isLocationDesired(job: { location: { name: string }, content?: string }) {
     const location = job.location.name
     const content = job.content
     if(!location) {
