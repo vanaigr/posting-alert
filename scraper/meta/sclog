@@ -1,2 +1,2 @@
 #!/bin/sh
-sudo journalctl -u myRun.service -f
+sudo journalctl -u myScraper.service -f

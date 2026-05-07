@@ -50,8 +50,8 @@ async function main() {
 
         log.I('Serving')
 
-        //const validationResult = validate(log, c)
-        //if(validationResult.status !== 'ok') return c.json({}, { status: 401 })
+        const validationResult = validate(log, c)
+        if(validationResult.status !== 'ok') return c.json({}, { status: 401 })
 
         const [cpu, mem, fileSystem] = await Promise.all([
             System.currentLoad(),
@@ -72,8 +72,8 @@ async function main() {
 
         log.I('Serving')
 
-        //const validationResult = validate(log, c)
-        //if(validationResult.status !== 'ok') return c.json({}, { status: 401 })
+        const validationResult = validate(log, c)
+        if(validationResult.status !== 'ok') return c.json({}, { status: 401 })
 
         const urlString = c.req.query('url')
         if(urlString !== undefined) {

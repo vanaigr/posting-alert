@@ -1,2 +1,2 @@
 #!/bin/sh
-sudo systemctl status myRun.service
+sudo systemctl status myScraper.service

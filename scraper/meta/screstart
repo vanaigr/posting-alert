@@ -1,2 +1,2 @@
 #!/bin/sh
-sudo systemctl restart myRun.service
+sudo systemctl restart myScraper.service
