@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "allowImportingTsExtensions": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "noEmit": true,
+    },
+    "include": ["src", "../scraper/src"],
+}

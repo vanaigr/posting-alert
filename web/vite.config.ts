@@ -9,6 +9,7 @@ export default defineConfig(() => {
     return {
         root: path.join(base, 'src'),
         publicDir: path.join(base, 'src', 'public'),
+        envDir: base,
         build: {
             outDir: path.join(base, 'dist'),
             emptyOutDir: true,

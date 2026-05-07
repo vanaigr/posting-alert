@@ -1,0 +1,77 @@
+ I: Serving at 3000
+ I: Serving at 3000
+ I: Serving at 3000
+ I: Serving at 3000
+ I: Serving at 3000
+[/check] I: Serving
+[/check] I: Greenhouse with 'amwell', '4240721009'
+[/check] I: Serving
+[/check] I: Greenhouse with 'amwell', '4240721009'
+ I: Serving at 3000
+[/stats] I: Serving
+ I: Serving at 3000
+[/stats] I: Serving
+ I: Serving at 3000
+[/stats] I: Serving
+[/stats] I: Serving
+ I: Serving at 3000
+[/stats] I: Serving
+ I: Serving at 3000
+ I: Serving at 3000
+[/stats] I: Serving
+ I: Serving at 3000
+ E: Uncaught exception from 'uncaughtException': Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at Server.listen (node:net:2110:7)
+    at serve (file:///home/me/gh/jobAlert/backend/node_modules/.pnpm/@hono+node-server@2.0.1_hono@4.12.18/node_modules/@hono/node-server/dist/index.mjs:1026:9)
+    at main (file:///home/me/gh/jobAlert/backend/src/index.ts:152:5)
+    at file:///home/me/gh/jobAlert/backend/src/index.ts:156:11 {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+ E: Uncaught exception from 'uncaughtException': Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at Server.listen (node:net:2110:7)
+    at serve (file:///home/me/gh/jobAlert/backend/node_modules/.pnpm/@hono+node-server@2.0.1_hono@4.12.18/node_modules/@hono/node-server/dist/index.mjs:1026:9)
+    at main (file:///home/me/gh/jobAlert/backend/src/index.ts:152:5)
+    at file:///home/me/gh/jobAlert/backend/src/index.ts:156:11 {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+ E: Uncaught exception from 'uncaughtException': Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at Server.listen (node:net:2110:7)
+    at serve (file:///home/me/gh/jobAlert/backend/node_modules/.pnpm/@hono+node-server@2.0.1_hono@4.12.18/node_modules/@hono/node-server/dist/index.mjs:1026:9)
+    at main (file:///home/me/gh/jobAlert/backend/src/index.ts:152:5)
+    at file:///home/me/gh/jobAlert/backend/src/index.ts:156:11 {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+ E: Uncaught exception from 'uncaughtException': Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at Server.listen (node:net:2110:7)
+    at serve (file:///home/me/gh/jobAlert/backend/node_modules/.pnpm/@hono+node-server@2.0.1_hono@4.12.18/node_modules/@hono/node-server/dist/index.mjs:1026:9)
+    at main (file:///home/me/gh/jobAlert/backend/src/index.ts:152:5)
+    at file:///home/me/gh/jobAlert/backend/src/index.ts:156:11 {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[/stats] I: Serving
+ I: Serving at 3000
+[/stats] I: Serving
