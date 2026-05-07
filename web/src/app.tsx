@@ -86,14 +86,22 @@ export default function App() {
     const [jobId, setJobId] = R.useState('')
     const [check, setCheck] = R.useState<CheckState>({ status: 'idle' })
 
+    const initData = (window as any).Telegram?.WebApp?.initData
+
     R.useEffect(() => {
         let cancelled = false
         let timer: ReturnType<typeof setTimeout> | null = null
 
         const tick = async() => {
+            if(!initData) return
+
             try {
                 const url = new URL('stats', import.meta.env.VITE_SERVER_URL)
-                const response = await fetch(url)
+                const response = await fetch(url, {
+                    headers: {
+                        Authorization: 'Bearer ' + btoa(initData),
+                    },
+                })
                 if(!response.ok) throw new Error(`HTTP ${response.status}`)
                 const data: Stats = await response.json()
                 if(cancelled) return
@@ -129,6 +137,8 @@ export default function App() {
     }, [])
 
     const send = async() => {
+        if(!initData) return
+
         setCheck({ status: 'pending' })
         try {
             const url = new URL('check', import.meta.env.VITE_SERVER_URL)
@@ -140,7 +150,11 @@ export default function App() {
                 url.searchParams.set('companyName', companyName.trim())
                 url.searchParams.set('jobId', jobId.trim())
             }
-            const response = await fetch(url)
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: 'Bearer ' + btoa(initData),
+                },
+            })
             if(!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => '')}`)
             const data: Check = await response.json()
             setCheck({ status: 'ok', data })
@@ -148,6 +162,10 @@ export default function App() {
         catch(err) {
             setCheck({ status: 'error', error: err instanceof Error ? err.message : String(err) })
         }
+    }
+
+    if(!initData) {
+        return <div>Not running as a Telegram app</div>
     }
 
     return <div className='flex-1 bg-slate-900 text-slate-100 p-3 flex flex-col gap-4'>
@@ -206,7 +224,6 @@ export default function App() {
                         type='text'
                         value={input}
                         onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => { if(e.key === 'Enter') send() }}
                         placeholder='Job URL'
                         className='flex-1 min-w-0 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:border-blue-500'
                     />
@@ -223,7 +240,6 @@ export default function App() {
                         type='text'
                         value={companyName}
                         onChange={e => setCompanyName(e.target.value)}
-                        onKeyDown={e => { if(e.key === 'Enter') send() }}
                         placeholder='Company name'
                         className='flex-1 min-w-0 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:border-blue-500'
                     />
@@ -231,7 +247,6 @@ export default function App() {
                         type='text'
                         value={jobId}
                         onChange={e => setJobId(e.target.value)}
-                        onKeyDown={e => { if(e.key === 'Enter') send() }}
                         placeholder='Job ID'
                         className='flex-1 min-w-0 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:border-blue-500'
                     />

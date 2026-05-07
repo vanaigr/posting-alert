@@ -1,2 +1,2 @@
 
-no-cache, max-age=0, no-store
+public, max-age=0, must-revalidate
