@@ -10,6 +10,7 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as N from '../lib/network.ts'
 import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as C from '../common.ts'
 
 const { lCompany: Company, lJob: Job } = Db
 
@@ -35,7 +36,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
-    U.evaluateTiers(mainLog, db, Company, Job, calculateTier)
+    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const connection = N.createConnection('https://jobs.lever.co', { connections: 30 })
 
@@ -51,9 +52,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
+            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
 
-            const overnightInfo = U.getOvernightInfo()
+            const overnightInfo = C.getOvernightInfo()
             if(overnightInfo.isOvernight) {
                 const other = db.select().from(Company)
                     .where(D.and(
@@ -94,7 +95,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 .limit(quota)
                 .all()
 
-            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.25], quota)
+            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.25], quota)
             desired.length = tiersCounts[0]
             relevant.length = tiersCounts[1]
 
@@ -195,9 +196,9 @@ async function checkCompany(
             if(AshbyTiers.isJobDesired(job.text, job.descriptionPlain) && isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is relevant!')
 
-                const ago = U.millisecToDurationString(Date.now() - (job.createdAt || 0))
+                const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
 
-                promises.push(U.sendMessage(
+                promises.push(C.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     db,
                     job.text + ' @ ' + company.name + '\n'

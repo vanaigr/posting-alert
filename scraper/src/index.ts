@@ -9,6 +9,7 @@ import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
 import * as Zohorecruit from './zohorecruit.ts'
+import * as C from './common.ts'
 
 let mainLog: L.Log | undefined
 
@@ -34,7 +35,7 @@ async function main() {
         Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
         Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
         Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
-        U.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
+        C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

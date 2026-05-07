@@ -7,6 +7,7 @@ import * as L from './lib/log.ts'
 import * as T from './lib/temporal.ts'
 import * as Db from './lib/db.ts'
 import * as AshbyTiers from './ashbyhq/tier.ts'
+import * as C from './common.ts'
 
 const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
 
@@ -43,7 +44,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
     const connection = new Agent({}).compose(interceptors.dns())
 
-    U.evaluateTiers(mainLog, db, Company, Job, calculateTier)
+    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -57,9 +58,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
+            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
 
-            const overnightInfo = U.getOvernightInfo()
+            const overnightInfo = C.getOvernightInfo()
             if(overnightInfo.isOvernight) {
                 const other = db.select().from(Company)
                     .where(D.and(
@@ -104,7 +105,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 .limit(quota)
                 .all()
 
-            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.25], quota - missing.length)
+            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.25], quota - missing.length)
             desired.length = tiersCounts[0]
             relevant.length = tiersCounts[1]
 
@@ -340,9 +341,9 @@ async function processJobDetail(
 
         const location = [job.city, job.country].filter(it => it).join(', ') || 'none'
 
-        const ago = U.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
+        const ago = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
-        await U.sendMessage(
+        await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
             job.title + ' @ ' + dbJob.companyName + '\n'

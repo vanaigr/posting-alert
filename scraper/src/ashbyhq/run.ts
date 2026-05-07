@@ -9,6 +9,7 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tiers from './tier.ts'
 import * as N from '../lib/network.ts'
+import * as C from '../common.ts'
 
 const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 
@@ -35,7 +36,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const jobsInProcess = new Set<string>()
     let rateLimit = false
 
-    U.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
+    C.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
 
     const connection = N.createConnection('https://jobs.ashbyhq.com', { connections: 1 })
 
@@ -52,9 +53,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
 
         const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...U.bannedCompanies]
+            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
 
-            const overnightInfo = U.getOvernightInfo()
+            const overnightInfo = C.getOvernightInfo()
             if(overnightInfo.isOvernight) {
                 const other = db.select().from(Company)
                     .where(D.and(
@@ -95,7 +96,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 .limit(quota)
                 .all()
 
-            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.1], quota)
+            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.1], quota)
             desired.length = tiersCounts[0]
             relevant.length = tiersCounts[1]
 
@@ -326,9 +327,9 @@ async function processJobDetail(
     if(shouldSend) {
         const tier = fetchRow.companyTier
 
-        const ago = U.millisecToDurationString(Date.now() - fetchRow.jobPostedAfter)
+        const ago = C.millisecToDurationString(Date.now() - fetchRow.jobPostedAfter)
 
-        await U.sendMessage(
+        await C.sendMessage(
             log,
             db,
             job.title + ' @ ' + fetchRow.companyName + '\n'
