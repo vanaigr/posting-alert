@@ -32,6 +32,11 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Populated companies')
     })()
 
+    db.run(D.sql`CREATE TABLE IF NOT EXISTS zohorecruit_tmp (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        json TEXT NOT NULL
+    )`)
+
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()
     let rateLimit = false
@@ -220,26 +225,36 @@ async function checkCompany(
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
-    for(const job of jobs) {
-        if(existingJobs.has(job.id)) continue
+    for(const rawJob of jobs) {
+        if(typeof rawJob.id !== 'string') continue
+
+        if(existingJobs.has(rawJob.id)) continue
+
+        const jobInfo: JobInfo = {
+            title: '' + (rawJob.Posting_Title || rawJob.Job_Opening_Name || ''),
+            remote: !!rawJob.Remote_Job,
+            country: '' + (rawJob.Country || rawJob.Country1 || ''),
+            state: '' + (rawJob.State || ''),
+            city: '' + (rawJob.City || ''),
+        }
 
         toInsert.push({
             companyName: company.name,
-            id: job.id,
+            id: rawJob.id,
             fetchedEpochMs: currentTime,
-            info: JSON.stringify(job satisfies FetchJob),
-            longInfo: job.Job_Description
-                ? JSON.stringify({ description: job.Job_Description } satisfies LongInfo)
+            info: JSON.stringify(jobInfo),
+            longInfo: typeof rawJob.Job_Description === 'string' && rawJob.Job_Description
+                ? JSON.stringify({ description: rawJob.Job_Description } satisfies LongInfo)
                 : null,
         })
 
         if(!initial) {
-            log.I('New job ', [job.id])
-            if(AshbyTiers.isJobDesired(job.Job_Opening_Name, undefined) && isLocationDesired(job)) {
-                log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
+            log.I('New job ', [rawJob.id])
+            if(AshbyTiers.isJobDesired(jobInfo.title, undefined) && isLocationDesired(jobInfo)) {
+                log.I('Job ', rawJob.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
-                    uniqueId: U.getHash(company.name, job.id),
-                    id: job.id,
+                    uniqueId: U.getHash(company.name, rawJob.id),
+                    id: rawJob.id,
                     companyName: company.name,
                     addedAt: currentTime,
                     jobPostedAfter: company.checkedEpochMs ?? 0,
@@ -283,7 +298,7 @@ async function processJobDetail(
     fetchDetails: D.InferSelectModel<typeof FetchJobDetails>,
     dbJob: D.InferSelectModel<typeof Job>,
 ) {
-    const job = JSON.parse(dbJob.info) as FetchJob
+    const job = JSON.parse(dbJob.info) as JobInfo
 
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
@@ -308,7 +323,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(AshbyTiers.isJobDesired(job.Job_Opening_Name, longInfo.description) && isLocationDesired(job)) {
+        if(AshbyTiers.isJobDesired(job.title, longInfo.description) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -319,20 +334,20 @@ async function processJobDetail(
 
     if(shouldSend) {
         const workplaceType = (() => {
-            if(job.Remote_Job) return 'Remote'
+            if(job.remote) return 'Remote'
             else return 'On-site'
         })()
 
-        const location = [job.City, job.Country].filter(it => it !== null).join(', ') || 'none'
+        const location = [job.city, job.country].filter(it => it).join(', ') || 'none'
 
         const ago = U.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
         await U.sendMessage(
-            log.addedCtx('job ', [job.id]),
+            log.addedCtx('job ', [dbJob.id]),
             db,
-            job.Job_Opening_Name + ' @ ' + dbJob.companyName + '\n'
+            job.title + ' @ ' + dbJob.companyName + '\n'
                 + workplaceType + ': ' + location + '\n'
-                + `Zoho ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(job.id)}`,
+                + `Zoho ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
         )
     }
 
@@ -377,44 +392,36 @@ function calculateTier(
 ): number {
     let hasRelevantLocation = false
     for(const job of jobs) {
-        const info: FetchJob | null = JSON.parse(job.info ?? 'null')
+        const info: JobInfo | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.Job_Opening_Name)) return 1
+        if(AshbyTiers.isJobRelevant(info.title)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
-function isLocationRelevant(info: FetchJob) {
-    const cityState = info.City || ''
+function isLocationRelevant(info: JobInfo) {
+    const cityState = info.city + ', ' + info.state
 
-    const isInUs = info.Country !== null
-        && (
-            info.Country.includes('US')
-                || /(united states|u\. ?s\.)/i.test(info.Country)
-        )
+    const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
-    const isRemote = /(remote|nationwide)/i.test(info.Job_Opening_Name) || info.Remote_Job
+    const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
-    const isRemoteWorldwide = info.Country === null && info.City === null
+    const isRemoteWorldwide = !info.country && !info.city
 
     return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 
-function isLocationDesired(info: FetchJob) {
-    const cityState = info.City || ''
+function isLocationDesired(info: JobInfo) {
+    const cityState = info.city + ', ' + info.state
 
-    const isInUs = info.Country !== null
-        && (
-            info.Country.includes('US')
-                || /(united states|u\. ?s\.)/i.test(info.Country)
-        )
+    const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
-    const isRemote = /(remote|nationwide)/i.test(info.Job_Opening_Name) || info.Remote_Job
+    const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
-    const isRemoteWorldwide = info.Country === null && info.City === null
+    const isRemoteWorldwide = !info.country && !info.city
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
     return isRemoteInUs || isRemoteWorldwide || isMyLocal
@@ -499,17 +506,32 @@ function extractJobs(log: L.Log, html: string) {
     log.I('Could not find jobs array ', [[' ', [html]], 'extra-details'])
 }
 
+/*
+const jobs = extractJobs(L.makeLogger(), await fetch('https://academicsinasia.zohorecruit.com/jobs/Careers').then(it => it.text()))
+console.log(jobs)
+*/
+
+type JobInfo = {
+    title: string
+    remote: boolean
+    country: string
+    state: string
+    city: string
+}
+
+// Yes, this is really the type. Anything can be anything
 type FetchJob = {
-    Industry: string
-    Remote_Job: boolean
-    Job_Type: string
-    Job_Opening_Name: string
-    Posting_Title: string,
-    Country: string | null
-    Is_Locked: boolean
-    id: string
-    City: string | null
-    Publish: boolean
-    Keep_on_Career_Site: boolean
-    Job_Description?: string
+    id?: unknown
+
+    Remote_Job?: unknown
+    Job_Opening_Name?: unknown
+    Posting_Title?: unknown
+    Job_Description?: unknown
+
+    City?: unknown
+    State?: unknown
+    Country?: unknown
+    Country1?: unknown
+
+    [K: string]: any
 }

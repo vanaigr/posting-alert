@@ -5,6 +5,11 @@ import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
 import Database from 'better-sqlite3'
 import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core'
 
+export const tmp = sqliteTable('zohorecruit_tmp', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    json: text('json').notNull(),
+})
+
 export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
