@@ -1,5 +1,5 @@
 [Unit]
-Description=My Run
+Description=My Scraper
 After=network.target
 
 [Service]
