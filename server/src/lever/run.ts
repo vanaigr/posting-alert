@@ -265,7 +265,7 @@ async function requestCompany(log: L.Log, connection: N.Connection, companyName:
     }
 }
 
-type type FetchJob = {
+export type FetchJob = {
     additionalPlain: string
     additional: string
     categories: {
