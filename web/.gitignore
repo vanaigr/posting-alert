@@ -1,2 +1,4 @@
 /tsconfig.tsbuildinfo
 /.env
+/.env.production
+/dist/
