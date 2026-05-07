@@ -29,10 +29,10 @@ async function main() {
     Db.migrate(db)
 
     await Promise.race([
-        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        //Lever.run(db, mainLog.addedCtx('lever')),
-        //Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
-        //Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
+        Lever.run(db, mainLog.addedCtx('lever')),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
         Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         U.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
     ])
