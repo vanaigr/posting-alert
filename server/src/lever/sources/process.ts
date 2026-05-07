@@ -42,11 +42,13 @@ for(const name of names3) {
     companies.add(name)
 }
 
+companies.add('casino-cash-trac')
+
 console.log('Found', companies.size, 'companies')
 
 fs.writeFileSync(
     path.join(import.meta.dirname, 'companyNames.json'),
-    JSON.stringify([...companies]),
+    JSON.stringify([...companies], undefined, 1),
 )
 
 function goodIndexOf(str: string, search: string, position?: number) {
