@@ -212,11 +212,10 @@ function verifyInitData(log: L.Log, initData: string) {
         return U.status('error')
     }
     params.delete('hash')
-    params.delete('signature')
 
     const dataCheckString = [...params.entries()]
         .map(([k, v]) => [k, v])
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
         .map(([k, v]) => `${k}=${v}`)
         .join('\n')
 
@@ -236,7 +235,7 @@ function verifyInitData(log: L.Log, initData: string) {
     }
 
     const userId = params.get('user') ? JSON.parse(params.get('user')!)?.id : undefined
-    if(userId !== userId!) {
+    if(String(userId) !== expectedUserId) {
         log.E('Unexpected user for ', [initData])
         return U.status('error')
     }
