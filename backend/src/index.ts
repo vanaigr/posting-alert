@@ -61,6 +61,7 @@ async function main() {
 
         return c.json({
             cpuLoadPercents: cpu.cpus.map(it => it.load),
+            ramTotalBytes: mem.total,
             ramFreeBytes: mem.available,
             storageFreeBytes: fileSystem.find(it => it.mount === '/')?.available ?? -1,
         })
@@ -75,76 +76,97 @@ async function main() {
         //if(validationResult.status !== 'ok') return c.json({}, { status: 401 })
 
         const urlString = c.req.query('url')
-        let url: URL
-        try {
-            url = new URL(urlString ?? '')
-        }
-        catch(err) {
-            log.E('For ', [urlString], ': ', [err])
-            return c.json({}, { status: 400 })
-        }
-
-        const _db = db as any
-
-        if(url.hostname === 'jobs.ashbyhq.com') {
-            const segments = url.pathname.split('/')
-            const companyName = segments[1]
-            const jobId = segments[2]
-            log.I('Ashbyhq with ', [companyName], ', ', [jobId])
-            if(!companyName || !jobId) {
+        if(urlString !== undefined) {
+            let url: URL
+            try {
+                url = new URL(urlString)
+            }
+            catch(err) {
+                log.E('For ', [urlString], ': ', [err])
                 return c.json({}, { status: 400 })
             }
 
-            return c.json(Check.ashbyhqGetPostingParams(_db, companyName, jobId))
+            const _db = db as any
+
+            if(url.hostname === 'jobs.ashbyhq.com') {
+                const segments = url.pathname.split('/')
+                const companyName = segments[1]
+                const jobId = segments[2]
+                log.I('Ashbyhq with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.ashbyhqGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname === 'jobs.lever.co') {
+                const segments = url.pathname.split('/')
+                const companyName = segments[1]
+                const jobId = segments[2]
+                log.I('Lever with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.leverGetPostingParams(_db, companyName, jobId))
+            }
+            // TODO: there's also embed url
+            else if(url.hostname === 'job-boards.greenhouse.io') {
+                const segments = url.pathname.split('/')
+                const companyName = segments[1]
+                const jobId = segments[3]
+                log.I('Greenhouse with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname.endsWith('.bamboohr.com')) {
+                const segments = url.pathname.split('/')
+                const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
+                const jobId = segments[2]
+                log.I('Bamboohr with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname.endsWith('.zohorecruit.com')) {
+                const segments = url.pathname.split('/')
+                const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
+                const jobId = segments[3]
+                log.I('Zohorecruit with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
+            }
+
+            log.I('Unknown url')
+            return c.json({}, { status: 404 })
         }
-        else if(url.hostname === 'jobs.lever.co') {
-            const segments = url.pathname.split('/')
-            const companyName = segments[1]
-            const jobId = segments[2]
-            log.I('Lever with ', [companyName], ', ', [jobId])
-            if(!companyName || !jobId) {
+        else {
+            const type = c.req.query('type')
+            const companyName = c.req.query('companyName')
+            const jobId = c.req.query('jobId')
+            if(type === undefined || companyName === undefined || jobId === undefined) {
                 return c.json({}, { status: 400 })
             }
 
-            return c.json(Check.leverGetPostingParams(_db, companyName, jobId))
-        }
-        // TODO: there's also embed url
-        else if(url.hostname === 'job-boards.greenhouse.io') {
-            const segments = url.pathname.split('/')
-            const companyName = segments[1]
-            const jobId = segments[3]
-            log.I('Greenhouse with ', [companyName], ', ', [jobId])
-            if(!companyName || !jobId) {
-                return c.json({}, { status: 400 })
-            }
+            const _db = db as any
 
-            return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
-        }
-        else if(url.hostname.endsWith('.bamboohr.com')) {
-            const segments = url.pathname.split('/')
-            const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
-            const jobId = segments[2]
-            log.I('Bamboohr with ', [companyName], ', ', [jobId])
-            if(!companyName || !jobId) {
-                return c.json({}, { status: 400 })
-            }
+            if(type === 'ashbyhq') return c.json(Check.ashbyhqGetPostingParams(_db, companyName, jobId))
+            if(type === 'lever') return c.json(Check.leverGetPostingParams(_db, companyName, jobId))
+            if(type === 'greenhouse') return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+            if(type === 'bamboohr') return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
+            if(type === 'zohorecruit') return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
 
-            return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
+            log.I('Unknown type')
+            return c.json({}, { status: 404 })
         }
-        else if(url.hostname.endsWith('.zohorecruit.com')) {
-            const segments = url.pathname.split('/')
-            const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
-            const jobId = segments[3]
-            log.I('Zohorecruit with ', [companyName], ', ', [jobId])
-            if(!companyName || !jobId) {
-                return c.json({}, { status: 400 })
-            }
-
-            return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
-        }
-
-        log.I('Unknown url')
-        return c.json({}, { status: 404 })
     })
 
     serve(app, (info) => mainLog.I('Serving at ', [info.port]))
