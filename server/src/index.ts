@@ -8,6 +8,7 @@ import * as Ashbyhq from './ashbyhq/run.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
+import * as Zohorecruit from './zohorecruit.ts'
 
 let mainLog: L.Log | undefined
 
@@ -32,6 +33,7 @@ async function main() {
         Lever.run(db, mainLog.addedCtx('lever')),
         Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
         Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         U.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
     ])
 

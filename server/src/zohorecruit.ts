@@ -1,28 +1,28 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 
-import * as U from '../lib/util.ts'
-import * as L from '../lib/log.ts'
-import * as T from '../lib/temporal.ts'
-import * as Db from '../lib/db.ts'
-import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as U from './lib/util.ts'
+import * as L from './lib/log.ts'
+import * as T from './lib/temporal.ts'
+import * as Db from './lib/db.ts'
+import * as AshbyTiers from './ashbyhq/tier.ts'
 
-const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
+const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
 
 const quota = 5
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    ;(() => {
-        const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
+    await (async() => {
+        const companyNames = await import(
+            './sources/zohorecruit/companyNames.json',
+            { with: { type: 'json' }},
+        ).then(it => it.default)
 
         for(let i = 0; i < companyNames.length; i += 3000) {
             const toInsert = companyNames
                 .slice(i, i + 3000)
-                .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
+                .map(it => ({ name: it, checkedEpochMs: null, exists: null, failCount: 0, tier: 0 }))
 
             db.insert(Company)
                 .values(toInsert)
@@ -67,19 +67,23 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                     .all()
 
                 if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
-                    return { desired: [], relevant: [], other }
+                    return { missing: [], desired: [], relevant: [], other }
                 }
             }
 
+            const missing = db.select().from(Company)
+                .where(D.and(
+                    D.isNull(Company.exists),
+                    D.not(D.inArray(Company.name, companiesToSkip)),
+                ))
+                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+                .limit(quota)
+                .all()
+
             const desired = db.select().from(Company)
                 .where(D.and(
-                    D.or(
-                        D.isNull(Company.exists),
-                        D.and(
-                            D.eq(Company.exists, 1),
-                            D.eq(Company.tier, 1),
-                        ),
-                    ),
+                    D.eq(Company.exists, 1),
+                    D.eq(Company.tier, 1),
                     D.not(D.inArray(Company.name, companiesToSkip)),
                 ))
                 .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
@@ -95,11 +99,11 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 .limit(quota)
                 .all()
 
-            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.25], quota)
+            const tiersCounts = U.selectCompanies([desired, relevant], [0.5, 0.25], quota - missing.length)
             desired.length = tiersCounts[0]
             relevant.length = tiersCounts[1]
 
-            return { desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
+            return { missing, desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
         })()
 
         const jobsToCheckDetails = db.select()
@@ -115,6 +119,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [toCheck.desired.length], ', ',
             [toCheck.relevant.length], ', ',
             [toCheck.other.length], ', ',
+            [toCheck.missing.length], ', ',
         )
 
         const currentTime = Date.now()
@@ -134,22 +139,23 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             }
         }
 
+        for(const it of toCheck.missing) handleCompanny(it, '?')
         for(const it of toCheck.desired) handleCompanny(it, 'I')
         for(const it of toCheck.relevant) handleCompanny(it, 'II')
         for(const it of toCheck.other) handleCompanny(it, 'III')
 
-        for(const { bamboohr_fetch_job_details, bamboohr_job } of jobsToCheckDetails) {
-            const log = mainLog.addedCtx([bamboohr_fetch_job_details.companyName], ' job ', [bamboohr_fetch_job_details.id])
+        for(const { zohorecruit_fetch_job_details, zohorecruit_job } of jobsToCheckDetails) {
+            const log = mainLog.addedCtx([zohorecruit_fetch_job_details.companyName], ' job ', [zohorecruit_fetch_job_details.id])
             ;(async() => {
                 try {
-                    jobsInProgress.add(bamboohr_fetch_job_details.uniqueId)
-                    await processJobDetail(db, log, connection, bamboohr_fetch_job_details, bamboohr_job)
+                    jobsInProgress.add(zohorecruit_fetch_job_details.uniqueId)
+                    await processJobDetail(db, log, connection, zohorecruit_fetch_job_details, zohorecruit_job)
                 }
                 catch(err) {
                     log.E([err])
                 }
                 finally {
-                    jobsInProgress.delete(bamboohr_fetch_job_details.uniqueId)
+                    jobsInProgress.delete(zohorecruit_fetch_job_details.uniqueId)
                 }
             })()
         }
@@ -166,15 +172,17 @@ async function checkCompany(
     company: D.InferSelectModel<typeof Company>,
     tier: string,
 ) {
-    const result = await request<{ result: FetchJob[] }>(log, connection, `https://${company.name}.bamboohr.com/careers/list`)
+    const result = await request(log, connection, `https://${company.name}.zohorecruit.com/jobs/Careers`)
     if(result.status === 'rate-limit') return result
+
+    const jobs = result.status === 'ok' ? extractJobs(log, result.data) : undefined
 
     db.update(Company)
         .set({ checkedEpochMs: currentTime })
         .where(D.eq(Company.name, company.name))
         .run()
 
-    if(result.status === 'not-found') {
+    if(result.status === 'not-found' || !jobs) {
         log.I('Company does not exist')
 
         db.update(Company)
@@ -212,7 +220,7 @@ async function checkCompany(
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
-    for(const job of result.data.result) {
+    for(const job of jobs) {
         if(existingJobs.has(job.id)) continue
 
         toInsert.push({
@@ -220,12 +228,14 @@ async function checkCompany(
             id: job.id,
             fetchedEpochMs: currentTime,
             info: JSON.stringify(job satisfies FetchJob),
-            longInfo: null,
+            longInfo: job.Job_Description
+                ? JSON.stringify({ description: job.Job_Description } satisfies LongInfo)
+                : null,
         })
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(AshbyTiers.isJobDesired(job.jobOpeningName, undefined) && isLocationDesired(job)) {
+            if(AshbyTiers.isJobDesired(job.Job_Opening_Name, undefined) && isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     uniqueId: U.getHash(company.name, job.id),
@@ -276,15 +286,15 @@ async function processJobDetail(
     const job = JSON.parse(dbJob.info) as FetchJob
 
     if(dbJob.longInfo === null) {
-        const url = `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(dbJob.id)}/detail`
-        log.I('Fetching job info: ', url/*sic*/)
-        const responseResult = await request<FetchLongInfo>(log, undefined, url)
+        log.I('Fetching job info')
+        const responseResult = await request(log, dispatcher, `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`)
         if(responseResult.status === 'ok') {
-            const longInfo = JSON.stringify({
-                description: responseResult.data.result.jobOpening.description,
-            } satisfies LongInfo)
-            db.update(Job).set({ longInfo }).where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id))).run()
-            dbJob.longInfo = longInfo
+            const description = extractJobDescription(log, responseResult.data)
+            if(description) {
+                const longInfo = JSON.stringify({ description } satisfies LongInfo)
+                db.update(Job).set({ longInfo }).where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id))).run()
+                dbJob.longInfo = longInfo
+            }
         }
         else {
             // TODO: report rate-limit up
@@ -298,7 +308,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(AshbyTiers.isJobDesired(job.jobOpeningName, longInfo.description) && isLocationDesired(job)) {
+        if(AshbyTiers.isJobDesired(job.Job_Opening_Name, longInfo.description) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -309,28 +319,20 @@ async function processJobDetail(
 
     if(shouldSend) {
         const workplaceType = (() => {
-            if(job.isRemote) return 'Remote'
-            if(job.locationType === '0') return 'On-site'
-            if(job.locationType === '1') return 'Remote'
-            if(job.locationType === '2') return 'Hybrid'
-            return 'error ' + job.locationType
+            if(job.Remote_Job) return 'Remote'
+            else return 'On-site'
         })()
 
-        const location = [
-            job.atsLocation.city || job.location.city,
-            job.atsLocation.state || job.location.state,
-            job.atsLocation.province,
-            job.atsLocation.country,
-        ].filter(it => it !== null).join(', ') || 'none'
+        const location = [job.City, job.Country].filter(it => it !== null).join(', ') || 'none'
 
         const ago = U.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
         await U.sendMessage(
             log.addedCtx('job ', [job.id]),
             db,
-            job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
+            job.Job_Opening_Name + ' @ ' + dbJob.companyName + '\n'
                 + workplaceType + ': ' + location + '\n'
-                + `Bamboo ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+                + `Zoho ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(job.id)}`,
         )
     }
 
@@ -341,15 +343,7 @@ type LongInfo = {
     description: string // html
 }
 
-type FetchLongInfo = {
-    result: {
-        jobOpening: {
-            description: string
-        },
-    }
-}
-
-async function request<R>(log: L.Log, connection: Dispatcher | undefined, url: string) {
+async function request(log: L.Log, connection: Dispatcher | undefined, url: string) {
     try {
         const response = await undiciFetch(url, { dispatcher: connection })
         if(response.status === 429) {
@@ -367,39 +361,14 @@ async function request<R>(log: L.Log, connection: Dispatcher | undefined, url: s
             log.E('Request failed: ', [response.status], ': ', [await response.text().catch(err => err)])
             return U.status('error')
         }
-        if(response.headers.get('content-type') !== 'application/json') {
-            await response.text().catch(err => err)
-            log.E('Returned non-json ', [response.headers.get('content-type')])
-            return U.status('not-found')
-        }
 
-        const json = await response.json() as R
-        return U.result('ok', json)
+        const html = await response.text()
+        return U.result('ok', html)
     }
     catch(err) {
         log.E('While requesting: ', [err])
         return U.status('error')
     }
-}
-
-type FetchJob = {
-    id: string
-    jobOpeningName: string
-    departmentId: string
-    departmentLabel: string
-    employmentStatusLabel: string
-    location: {
-        city: string | null
-        state: string | null
-    }
-    atsLocation: {
-        country: string | null
-        state: string | null
-        province: string | null
-        city: string | null
-    },
-    isRemote: null
-    locationType: string | null // 0 - on-site, 1 - remote, 2 - hybrid, null have not seen
 }
 
 function calculateTier(
@@ -412,47 +381,135 @@ function calculateTier(
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.jobOpeningName)) return 1
+        if(AshbyTiers.isJobRelevant(info.Job_Opening_Name)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
 function isLocationRelevant(info: FetchJob) {
-    const cityState = (info.atsLocation.city || info.location.city || '')
-        + ', ' + (info.atsLocation.state || info.location.state || '')
+    const cityState = info.City || ''
 
-    const isInUs = info.atsLocation.country !== null
+    const isInUs = info.Country !== null
         && (
-            info.atsLocation.country === 'US'
-                || info.atsLocation.country === 'us'
-                || /(united states|america)/i.test(info.atsLocation.country)
+            info.Country.includes('US')
+                || /(united states|u\. ?s\.)/i.test(info.Country)
         )
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
-    const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
+    const isRemote = /(remote|nationwide)/i.test(info.Job_Opening_Name) || info.Remote_Job
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
-    const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
-        && info.location.state === null && info.location.city === null
+    const isRemoteWorldwide = info.Country === null && info.City === null
 
     return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
 }
 
 function isLocationDesired(info: FetchJob) {
-    const cityState = (info.atsLocation.city || info.location.city || '')
-        + ', ' + (info.atsLocation.state || info.location.state || '')
+    const cityState = info.City || ''
 
-    const isInUs = info.atsLocation.country !== null
+    const isInUs = info.Country !== null
         && (
-            info.atsLocation.country === 'US'
-                || info.atsLocation.country === 'us'
-                || /(united states|america)/i.test(info.atsLocation.country)
+            info.Country.includes('US')
+                || /(united states|u\. ?s\.)/i.test(info.Country)
         )
     const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
-    const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
+    const isRemote = /(remote|nationwide)/i.test(info.Job_Opening_Name) || info.Remote_Job
     const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
-    const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
-        && info.location.state === null && info.location.city === null
+    const isRemoteWorldwide = info.Country === null && info.City === null
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
     return isRemoteInUs || isRemoteWorldwide || isMyLocal
+}
+
+function extractJobDescription(log: L.Log, html: string) {
+    const prefix = "var jobs = JSON.parse('"
+    const beginI = html.indexOf(prefix)
+    if(beginI === -1) {
+        log.I('Did not find jobs array start', [[' ', [html]], 'extra-details'])
+        return
+    }
+
+    const endI = html.indexOf("'", beginI + prefix.length)
+    if(endI === -1) {
+        log.I('Did not find jobs array end', [[' ', [html]], 'extra-details'])
+        return
+    }
+
+    const jsonEncoded = html.substring(beginI + prefix.length, endI)
+    const json = jsonEncoded.replaceAll(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)/g, (match) => {
+        if(match.startsWith('\\x')) {
+            return String.fromCodePoint(parseInt(match.slice(2, 4), 16))
+        }
+        else if(match.startsWith('\\u')) {
+            return String.fromCodePoint(parseInt(match.slice(2, 6), 16))
+        }
+        else {
+            return match.slice(1)
+        }
+    })
+    const object = (() => {
+        try {
+            return JSON.parse(json)
+        }
+        catch(err) {
+            log.I('Could not parse json ', [err], [[' ', [html]], 'extra-details'])
+            return undefined
+        }
+    })()
+    if(!object) return
+
+    return object[0].Job_Description as string
+}
+
+function extractJobs(log: L.Log, html: string) {
+    for(const match of html.matchAll(/<input /g)) {
+        const end = html.indexOf('>', match.index + 7)
+        if(end === -1) continue
+
+        const toSeach = html.substring(match.index + 7, end) // not exploding the memory here. Trust
+        if(!toSeach.includes('id="jobs"')) continue
+
+        const prefix = 'value="'
+        let valueBegin = toSeach.indexOf(prefix)
+        if(valueBegin === -1) continue
+        valueBegin += prefix.length
+
+        const valueEnd = toSeach.indexOf('"', valueBegin)
+        if(valueEnd === -1) continue
+
+        const jsonEncoded = toSeach.substring(valueBegin, valueEnd)
+        const json = jsonEncoded.replaceAll(/&#([^;]+);/g, (match, capture) => {
+            const number = parseInt(capture, 10)
+            if(!isFinite(number)) return match
+            return String.fromCodePoint(capture)
+        })
+        const object = (() => {
+            try {
+                return JSON.parse(json)
+            }
+            catch(err) {
+                log.I('Could not parse json ', [err], ', ', [match.index], [[' ', [html]], 'extra-details'])
+                return undefined
+            }
+        })()
+        if(!object) continue
+
+        return object as FetchJob[]
+    }
+
+    log.I('Could not find jobs array ', [[' ', [html]], 'extra-details'])
+}
+
+type FetchJob = {
+    Industry: string
+    Remote_Job: boolean
+    Job_Type: string
+    Job_Opening_Name: string
+    Posting_Title: string,
+    Country: string | null
+    Is_Locked: boolean
+    id: string
+    City: string | null
+    Publish: boolean
+    Keep_on_Career_Site: boolean
+    Job_Description?: string
 }

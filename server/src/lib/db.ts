@@ -20,6 +20,7 @@ export const aJob = sqliteTable('ashbyhq_job', {
     fetchedEpochMs: integer('fetched_epoch_ms'),
 })
 
+// TODO: delete
 export const aToReview = sqliteTable('ashbyhq_to_review', {
     id: text('id').primaryKey(),
 })
@@ -30,6 +31,7 @@ export const aFetchJobDetails = sqliteTable('ashby_fetch_job_details', {
     jobPostedAfter: integer('job_posted_after').notNull(),
     companyTier: text('company_tier').notNull(),
 })
+
 
 export const lCompany = sqliteTable('lever_company', {
     name: text('name').primaryKey(),
@@ -45,6 +47,7 @@ export const lJob = sqliteTable('lever_job', {
     info: text('info').notNull(),
 })
 
+
 export const gCompany = sqliteTable('greenhouse_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
@@ -58,6 +61,7 @@ export const gJob = sqliteTable('greenhouse_job_2', {
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
     info: text('info').notNull(),
 })
+
 
 export const bamboohrCompany = sqliteTable('bamboohr_company', {
     name: text('name').primaryKey(),
@@ -90,11 +94,46 @@ export const bamboohrFetchJobDetails = sqliteTable('bamboohr_fetch_job_details',
     companyTier: text('company_tier').notNull(),
 })
 
+
+export const zohorecruitCompany = sqliteTable('zohorecruit_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
+})
+
+export const zohorecruitJob = sqliteTable(
+    'zohorecruit_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+        longInfo: text('long_info'),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ],
+)
+
+export const zohorecruitFetchJobDetails = sqliteTable('zohorecruit_fetch_job_details', {
+    uniqueId: text('unique_id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
+})
+
+
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     message: text('message').notNull(),
     originalEpochMs: integer('original_epoch_ms').notNull(),
 })
+
+
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
@@ -340,6 +379,37 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`CREATE INDEX bamboohr_company_exists_tier_checked_idx ON bamboohr_company("exists", tier, checked_epoch_ms)`)
 
             tx.run(sql`PRAGMA user_version = 17`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 17) {
+            tx.run(sql`CREATE TABLE zohorecruit_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER,
+                fail_count INTEGER NOT NULL,
+                tier INTEGER NOT NULL
+            )`)
+            tx.run(sql`CREATE TABLE zohorecruit_job (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                long_info TEXT,
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`CREATE TABLE zohorecruit_fetch_job_details (
+                unique_id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                added_at INTEGER NOT NULL,
+                job_posted_after INTEGER NOT NULL,
+                company_tier TEXT NOT NULL
+            )`)
+            tx.run(sql`CREATE INDEX zohorecruit_company_exists_tier_checked_idx ON zohorecruit_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 18`)
         }
     })
 }
