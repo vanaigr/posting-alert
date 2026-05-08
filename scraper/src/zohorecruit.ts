@@ -33,11 +33,6 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Populated companies')
     })()
 
-    db.run(D.sql`CREATE TABLE IF NOT EXISTS zohorecruit_tmp (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        json TEXT NOT NULL
-    )`)
-
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()
     let rateLimit = false
