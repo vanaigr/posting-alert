@@ -33,11 +33,11 @@ async function main() {
 
     await Promise.race([
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
-        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        //Lever.run(db, mainLog.addedCtx('lever')),
-        //Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
-        //Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
-        //Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
+        Lever.run(db, mainLog.addedCtx('lever')),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         Gem.run(db, mainLog.addedCtx('gem')),
     ])
 
