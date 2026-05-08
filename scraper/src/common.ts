@@ -119,6 +119,7 @@ export function millisecToDurationString(ms: number) {
 
 export const bannedCompanies = [
     'jobgether',
+    'g2i',
 ]
 
 export function evaluateTiers<C extends { name: string }, J extends { companyName: string }>(
