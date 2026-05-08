@@ -5,11 +5,6 @@ import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
 import Database from 'better-sqlite3'
 import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core'
 
-export const tmp = sqliteTable('zohorecruit_tmp', {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    json: text('json').notNull(),
-})
-
 export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
@@ -415,6 +410,18 @@ PRAGMA mmap_size = 268435456;
             )`)
             tx.run(sql`CREATE INDEX zohorecruit_company_exists_tier_checked_idx ON zohorecruit_company("exists", tier, checked_epoch_ms)`)
             tx.run(sql`PRAGMA user_version = 18`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 18) {
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 19`)
         }
     })
 }

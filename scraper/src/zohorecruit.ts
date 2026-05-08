@@ -407,21 +407,19 @@ export function isLocationRelevant(info: JobInfo) {
     const cityState = info.city + ', ' + info.state
 
     const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
-    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
     const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
-    const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
+    const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = !info.country && !info.city
 
-    return isInUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
+    return isInUs || isRemoteInUs || isRemoteWorldwide
 }
 
 export function isLocationDesired(info: JobInfo) {
     const cityState = info.city + ', ' + info.state
 
     const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
-    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(cityState) || AshbyTiers.citiesStatesRegex2.test(cityState)
     const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
-    const isRemoteInUs = isRemote && (isInUs || mentionsUsConcrete)
+    const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = !info.country && !info.city
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
