@@ -137,7 +137,7 @@ async function checkCompany(
 
                 const ago = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
                 const locations = jobInfo.locations.map(it => {
-                    const city = it.name !== it.city ? it.name + ' - ' + it.city : it.name
+                    const city = [...new Set([it.name, it.city])].filter(it => it).join(' - ')
                     return (it.isRemote ? 'Remote ' : '') + city + ', ' + it.isoCountry
                 })
 
