@@ -39,7 +39,7 @@ type CheckState =
 
 const MAX_SAMPLES = 30
 
-const TYPES = ['ashbyhq', 'lever', 'greenhouse', 'bamboohr', 'zohorecruit'] as const
+const TYPES = ['ashbyhq', 'lever', 'greenhouse', 'bamboohr', 'zohorecruit', 'gem', 'rippling'] as const
 type Type = typeof TYPES[number]
 
 function formatBytes(bytes: number): string {

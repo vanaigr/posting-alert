@@ -2,17 +2,17 @@ import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 
-import * as U from './lib/util.ts'
-import * as L from './lib/log.ts'
-import * as T from './lib/temporal.ts'
-import * as Db from './lib/db.ts'
-import * as AshbyTiers from './ashbyhq/tier.ts'
-import * as C from './common.ts'
+import * as U from '../lib/util.ts'
+import * as L from '../lib/log.ts'
+import * as T from '../lib/temporal.ts'
+import * as Db from '../lib/db.ts'
+import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as C from '../common.ts'
 
 const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    await import('./sources/zohorecruit/companyNames.json', { with: { type: 'json' } }).then(it => {
+    await import('../sources/zohorecruit/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, {
             checkedEpochMs: null,
             exists: null,
@@ -57,6 +57,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [toCheck.relevant.length], ', ',
             [toCheck.other.length], ', ',
             [toCheck.missing.length], ', ',
+            'job details: ', [jobsToCheckDetails.length],
         )
 
         const currentTime = Date.now()

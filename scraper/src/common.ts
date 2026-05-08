@@ -11,10 +11,12 @@ type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<
 
 export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany
     | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany | typeof Db.gemCompany
+    | typeof Db.ripplingCompany
 export type AnyComany = InferTable<AnyCompanyTable>
 
 export type AnyJobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob
     | typeof Db.bamboohrJob | typeof Db.zohorecruitJob | typeof Db.gemJob
+    | typeof Db.ripplingJob
 export type AnyJob = InferTable<AnyJobTable>
 
 

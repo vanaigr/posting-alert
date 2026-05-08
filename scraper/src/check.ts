@@ -5,11 +5,14 @@ import * as D from 'drizzle-orm'
 
 import * as Db from './lib/db.ts'
 import * as T from './lib/temporal.ts'
+import * as C from './common.ts'
 import * as AshbyTiers from './ashbyhq/tier.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
-import * as Zohorecruit from './zohorecruit.ts'
+import * as Zohorecruit from './boards/zohorecruit.ts'
+import * as Gem from './boards/gem.ts'
+import * as Rippling from './boards/rippling.ts'
 
 type CompanyParams = {
     exists: number | null
@@ -28,12 +31,7 @@ type JobParams = {
 
 export type PostingParams = { company: CompanyParams | undefined, job: JobParams | undefined }
 
-type CompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany
-type InferredCompany = CompanyTable extends infer C ? C extends D.Table<D.TableConfig<D.Column<any, object, object>>> ? D.InferSelectModel<C> : never : never
-
-type JobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob | typeof Db.bamboohrJob | typeof Db.zohorecruitJob
-
-function calculateCompanyParams(company: InferredCompany | undefined): CompanyParams | undefined {
+function calculateCompanyParams(company: C.AnyComany | undefined): CompanyParams | undefined {
     if(!company) return
 
     return {
@@ -43,10 +41,10 @@ function calculateCompanyParams(company: InferredCompany | undefined): CompanyPa
         failCount: 'failCount' in company ? company.failCount : undefined,
     }
 }
-function lookupCompany(db: BetterSQLite3Database, table: CompanyTable, companyName: string) {
+function lookupCompany(db: BetterSQLite3Database, table: C.AnyCompanyTable, companyName: string) {
     return db.select().from(table).where(D.eq(table.name, companyName)).get()
 }
-function lookupJob<T extends JobTable>(db: BetterSQLite3Database, table: T, companyName: string, jobId: string) {
+function lookupJob<T extends C.AnyJobTable>(db: BetterSQLite3Database, table: T, companyName: string, jobId: string) {
     return db.select().from(table)
         .where(D.and(D.eq(table.companyName, companyName), D.eq(table.id, jobId)))
         .get()
@@ -154,6 +152,45 @@ export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyNa
     }
 }
 
+export function gemGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+    return {
+        company: calculateCompanyParams(lookupCompany(db, Db.gemCompany, companyName)),
+        job: ((): JobParams | undefined => {
+            const job = lookupJob(db, Db.gemJob, companyName, jobId)
+            if(!job) return
+
+            const info: Gem.JobInfo = JSON.parse(job.info)
+            return {
+                fetchedEpochMs: job.fetchedEpochMs,
+                locationRelevant: Gem.isLocationRelevant(info),
+                locationDesired: Gem.isLocationDesired(info),
+                jobRelevant: AshbyTiers.isJobRelevant(info.title),
+                jobDesired: AshbyTiers.isJobDesired(info.title, info.descriptionHtml),
+            }
+        })(),
+    }
+}
+
+export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+    return {
+        company: calculateCompanyParams(lookupCompany(db, Db.ripplingCompany, companyName)),
+        job: ((): JobParams | undefined => {
+            const job = lookupJob(db, Db.ripplingJob, companyName, jobId)
+            if(!job) return
+
+            const info: Rippling.JobInfo = JSON.parse(job.info)
+            const longInfo: Rippling.LongInfo | null = job.longInfo ? JSON.parse(job.longInfo) : null
+            return {
+                fetchedEpochMs: job.fetchedEpochMs,
+                locationRelevant: Rippling.isLocationRelevant(info),
+                locationDesired: Rippling.isLocationDesired(info),
+                jobRelevant: AshbyTiers.isJobRelevant(info.title),
+                jobDesired: AshbyTiers.isJobDesired(info.title, longInfo?.descriptionHtml),
+            }
+        })(),
+    }
+}
+
 if(import.meta.main) {
     const [sourceArg, companyName, jobId] = process.argv.slice(2)
 
@@ -179,6 +216,12 @@ if(import.meta.main) {
         }
         else if(sourceArg === 'zoho') {
             return zohorecruitGetPostingParams(db, companyName, jobId)
+        }
+        else if(sourceArg === 'gem') {
+            return gemGetPostingParams(db, companyName, jobId)
+        }
+        else if(sourceArg === 'rippling') {
+            return ripplingGetPostingParams(db, companyName, jobId)
         }
     })()
     if(params === undefined) {

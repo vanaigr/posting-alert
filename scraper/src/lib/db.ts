@@ -127,13 +127,6 @@ export const zohorecruitFetchJobDetails = sqliteTable('zohorecruit_fetch_job_det
 })
 
 
-export const pendingNotification = sqliteTable('pending_notification', {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    message: text('message').notNull(),
-    originalEpochMs: integer('original_epoch_ms').notNull(),
-})
-
-
 export const gemCompany = sqliteTable('gem_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
@@ -154,6 +147,43 @@ export const gemJob = sqliteTable(
     ],
 )
 
+
+export const ripplingCompany = sqliteTable('rippling_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+    tier: integer('tier').notNull(),
+})
+
+export const ripplingJob = sqliteTable(
+    'rippling_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+        longInfo: text('long_info'),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ],
+)
+
+export const ripplingFetchJobDetails = sqliteTable('rippling_fetch_job_details', {
+    uniqueId: text('unique_id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
+})
+
+
+export const pendingNotification = sqliteTable('pending_notification', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    message: text('message').notNull(),
+    originalEpochMs: integer('original_epoch_ms').notNull(),
+})
 
 
 export function migrate(db: BetterSQLite3Database) {
@@ -464,6 +494,36 @@ PRAGMA mmap_size = 268435456;
             )`)
             tx.run(sql`CREATE INDEX gem_company_exists_tier_checked_idx ON gem_company("exists", tier, checked_epoch_ms)`)
             tx.run(sql`PRAGMA user_version = 20`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 20) {
+            tx.run(sql`CREATE TABLE rippling_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER,
+                tier INTEGER NOT NULL
+            )`)
+            tx.run(sql`CREATE TABLE rippling_job (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                long_info TEXT,
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`CREATE TABLE rippling_fetch_job_details (
+                unique_id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                added_at INTEGER NOT NULL,
+                job_posted_after INTEGER NOT NULL,
+                company_tier TEXT NOT NULL
+            )`)
+            tx.run(sql`CREATE INDEX rippling_company_exists_tier_checked_idx ON rippling_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 21`)
         }
     })
 }

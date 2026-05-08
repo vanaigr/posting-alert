@@ -10,8 +10,9 @@ import * as Ashbyhq from './ashbyhq/run.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
-import * as Zohorecruit from './zohorecruit.ts'
-import * as Gem from './gem.ts'
+import * as Zohorecruit from './boards/zohorecruit.ts'
+import * as Gem from './boards/gem.ts'
+import * as Rippling from './boards/rippling.ts'
 
 let mainLog: L.Log | undefined
 
@@ -39,6 +40,7 @@ async function main() {
         Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
         Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         Gem.run(db, mainLog.addedCtx('gem')),
+        Rippling.run(db, mainLog.addedCtx('rippling')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

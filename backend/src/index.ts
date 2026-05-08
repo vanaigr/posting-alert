@@ -144,6 +144,28 @@ async function main() {
 
                 return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
             }
+            else if(url.hostname === 'jobs.gem.com') {
+                const segments = url.pathname.split('/')
+                const companyName = segments[1]
+                const jobId = segments[2]
+                log.I('Gem with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.gemGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname === 'ats.rippling.com') {
+                const segments = url.pathname.split('/')
+                const companyName = segments[1]
+                const jobId = segments[3]
+                log.I('Rippling with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
+            }
 
             log.I('Unknown url')
             return c.json({}, { status: 404 })
@@ -163,6 +185,8 @@ async function main() {
             if(type === 'greenhouse') return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
             if(type === 'bamboohr') return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
             if(type === 'zohorecruit') return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
+            if(type === 'gem') return c.json(Check.gemGetPostingParams(_db, companyName, jobId))
+            if(type === 'rippling') return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
 
             log.I('Unknown type')
             return c.json({}, { status: 404 })

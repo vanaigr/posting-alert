@@ -80,7 +80,7 @@ export function isLocationRelevant(job: any) {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
         const mentionsUsConcrete = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
         const isRemoteWorldwide = location.toLowerCase() === 'remote'
 
         return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
@@ -91,7 +91,7 @@ export function isLocationDesired(job: any) {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
         const mentionsUsConcrete = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)// || !(otherCountriesRegex1.test(location) || otherCountriesRegex2.test(location))))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
         const isRemoteWorldwide = location.toLowerCase() === 'remote'
         const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
         const onSite = !isRemote && (job.workplaceType === 'OnSite' || job.workplaceType === 'Hybrid')
