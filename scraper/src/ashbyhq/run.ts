@@ -370,9 +370,10 @@ async function getCompaniesDetails(
         variables['ji' + jobDetailEncoded[i]] = jobDetails[i].id
     }
 
-    const responseStatus = await fetchGraphql<Record<string, ApiJobBoardWithTeams | ApiJobPosting>>(
+    const responseStatus = await C.fetchGraphql<Record<string, ApiJobBoardWithTeams | ApiJobPosting>>(
         connection,
         log,
+        '/api/non-user-graphql',
         {
             operationName: 'ApiJobBoardWithTeams',
             variables,
@@ -434,48 +435,3 @@ type ApiJobPosting = null | {
     compensationTierSummary: string | null
 }
 
-async function fetchGraphql<T extends {}>(connection: N.Connection, log: L.Log, body: any) {
-    type GraphqlWrapper = {
-        data?: T
-        errors?: { message: string }[]
-    }
-
-    try {
-        const response = await N.fetch(connection, {
-            path: '/api/non-user-graphql',
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        })
-        if(response.statusCode === 429) {
-            log.E('Rate limited')
-            await response.body.text().catch(() => {})
-            return U.status('rate-limit')
-        }
-        if(response.statusCode !== 200) {
-            log.E(
-                'Request failed (soft): ',
-                [response.statusCode],
-                ' with ',
-                ...await response.body.text().then(
-                    (it): L.Message => ['body ', [it]],
-                    (err): L.Message => ['body error ', [err]],
-                ),
-            )
-            return U.status('error')
-        }
-
-        const json = await response.body.json() as GraphqlWrapper
-        if(json.data === undefined) {
-            log.E('Query failed: ', [json])
-            return U.status('error')
-        }
-        return U.result('ok', json.data)
-    }
-    catch(err) {
-        log.E('Request failed: ', [err])
-        return U.status('error')
-    }
-}

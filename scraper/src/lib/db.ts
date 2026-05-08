@@ -134,6 +134,27 @@ export const pendingNotification = sqliteTable('pending_notification', {
 })
 
 
+export const gemCompany = sqliteTable('gem_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+    tier: integer('tier').notNull(),
+})
+
+export const gemJob = sqliteTable(
+    'gem_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ],
+)
+
+
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
@@ -422,6 +443,27 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`update bamboohr_company set tier = 0`)
             tx.run(sql`update zohorecruit_company set tier = 0`)
             tx.run(sql`PRAGMA user_version = 19`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 19) {
+            tx.run(sql`CREATE TABLE gem_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER,
+                tier INTEGER NOT NULL
+            )`)
+            tx.run(sql`CREATE TABLE gem_job (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`CREATE INDEX gem_company_exists_tier_checked_idx ON gem_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 20`)
         }
     })
 }

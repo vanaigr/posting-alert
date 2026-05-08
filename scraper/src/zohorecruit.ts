@@ -40,7 +40,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], {
-            quota: 4, // too little companies + stalls a lot
+            quota: 4, // too few companies + stalls a lot
         })
 
         const jobsToCheckDetails = db.select()

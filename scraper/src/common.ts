@@ -4,16 +4,17 @@ import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
 import * as T from './lib/temporal.ts'
+import * as N from './lib/network.ts'
 import * as Db from './lib/db.ts'
 
 type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<V> : never : never
 
 export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany
-    | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany
+    | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany | typeof Db.gemCompany
 export type AnyComany = InferTable<AnyCompanyTable>
 
 export type AnyJobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob
-    | typeof Db.bamboohrJob | typeof Db.zohorecruitJob
+    | typeof Db.bamboohrJob | typeof Db.zohorecruitJob | typeof Db.gemJob
 export type AnyJob = InferTable<AnyJobTable>
 
 
@@ -263,7 +264,9 @@ export function populateCompanies<T extends AnyCompanyTable>(
     db: BetterSQLite3Database,
     Company: T,
     companyNames: string[],
-    baseCompanyRecord: Omit<D.InferInsertModel<T>, 'name'>
+    // NOTE: typescript language server goes crazy if this is insert model
+    // it says property does not exist in the type where it exists. tsc reports no errors.
+    baseCompanyRecord: Omit<D.InferSelectModel<T>, 'name'>,
 ) {
     for(let i = 0; i < companyNames.length; i += 3000) {
         const toInsert = companyNames.slice(i, i + 3000).map(it => ({ ...baseCompanyRecord, name: it }))
@@ -274,4 +277,48 @@ export function populateCompanies<T extends AnyCompanyTable>(
             .execute()
     }
     log.I('Populated companies')
+}
+
+export async function fetchGraphql<T extends {}>(connection: N.Connection, log: L.Log, path: string, body: any) {
+    type GraphqlWrapper = {
+        data?: T
+        errors?: { message: string }[]
+    }
+
+    try {
+        const response = await N.fetch(connection, {
+            path,
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        if(response.statusCode === 429) {
+            log.E('Rate limited')
+            await response.body.text().catch(() => {})
+            return U.status('rate-limit')
+        }
+        if(response.statusCode !== 200) {
+            log.E(
+                'Request failed (soft): ',
+                [response.statusCode],
+                ' with ',
+                ...await response.body.text().then(
+                    (it: string): L.Message => ['body ', [it]],
+                    (err: unknown): L.Message => ['body error ', [err]],
+                ),
+            )
+            return U.status('error')
+        }
+
+        const json = await response.body.json() as GraphqlWrapper
+        if(json.data === undefined) {
+            log.E('Query failed: ', [json])
+            return U.status('error')
+        }
+        return U.result('ok', json.data)
+    }
+    catch(err) {
+        log.E('Request failed: ', [err])
+        return U.status('error')
+    }
 }
