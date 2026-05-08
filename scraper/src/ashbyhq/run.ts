@@ -1,5 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
@@ -13,30 +11,15 @@ import * as C from '../common.ts'
 
 const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 
-const quota = 5
-
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    ;(() => {
-        const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
-
-        for(let i = 0; i < companyNames.length; i += 3000) {
-            const toInsert = companyNames
-                .slice(i, i + 3000)
-                .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
-
-            db.insert(Company)
-                .values(toInsert)
-                .onConflictDoNothing()
-                .execute()
-        }
-        mainLog.I('Populated companies')
-    })()
+    await import('./sources/companyNames.json', { with: { type: 'json' } }).then(it => {
+        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+    })
+    C.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProcess = new Set<string>()
     let rateLimit = false
-
-    C.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
 
     const connection = N.createConnection('https://jobs.ashbyhq.com', { connections: 1 })
 
@@ -52,66 +35,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
 
-        const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], { weights: [0.5, 0.1] })
 
-            const overnightInfo = C.getOvernightInfo()
-            if(overnightInfo.isOvernight) {
-                const other = db.select().from(Company)
-                    .where(D.and(
-                        D.eq(Company.exists, 1),
-                        D.eq(Company.tier, 3),
-                        D.not(D.inArray(Company.name, companiesToSkip)),
-                    ))
-                    .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                    .limit(quota)
-                    .all()
-
-                if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
-                    return { desired: [], relevant: [], other }
-                }
-            }
-
-            const desired = db.select().from(Company)
-                .where(D.and(
-                    D.or(
-                        D.isNull(Company.exists),
-                        D.and(
-                            D.eq(Company.exists, 1),
-                            D.eq(Company.tier, 1),
-                        ),
-                    ),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-            const relevant = db.select().from(Company)
-                .where(D.and(
-                    D.eq(Company.exists, 1),
-                    D.eq(Company.tier, 2),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-
-            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.1], quota)
-            desired.length = tiersCounts[0]
-            relevant.length = tiersCounts[1]
-
-            return { desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
-        })()
-
-        const jobsToCheckDetails = db.select({
-            id: FetchJobDetails.id,
-            companyName: Job.companyName,
-            addedAt: FetchJobDetails.addedAt,
-            jobPostedAfter: FetchJobDetails.jobPostedAfter,
-            companyTier: FetchJobDetails.companyTier,
-            shortInfo: Job.shortInfo,
-            longInfo: Job.longInfo,
-        })
+        const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
             .innerJoin(Job, D.eq(FetchJobDetails.id, Job.id))
             .where(D.not(D.inArray(FetchJobDetails.id, [...jobsInProcess])))
@@ -124,28 +50,30 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [toCheck.desired.length], ', ',
             [toCheck.relevant.length], ', ',
             [toCheck.other.length], ', ',
+            [toCheck.missing.length], ', ',
             'job details: ', [jobsToCheckDetails.length],
         )
 
         ;(async() => {
-            const companiesToCheck = [...toCheck.desired, ...toCheck.relevant, ...toCheck.other]
+            const companiesToCheck = [...toCheck.desired, ...toCheck.relevant, ...toCheck.other, ...toCheck.missing]
             const tiersByIndex: string[] = [
                 ...toCheck.desired.map(() => 'I'),
                 ...toCheck.relevant.map(() => 'II'),
                 ...toCheck.other.map(() => 'III'),
+                ...toCheck.missing.map(() => '?'),
             ]
 
             try {
                 const companyNames = companiesToCheck.map(it => it.name)
                 for(const it of companiesToCheck) companiesInProcess.add(it.name)
-                for(const it of jobsToCheckDetails) jobsInProcess.add(it.id)
+                for(const it of jobsToCheckDetails) jobsInProcess.add(it.ashbyhq_job.id)
 
                 const jobDetailRequests: { id: string, companyName: string }[] = []
                 for(const job of jobsToCheckDetails) {
-                    if(job.longInfo === null) {
+                    if(job.ashbyhq_job.longInfo === null) {
                         jobDetailRequests.push({
-                            companyName: job.companyName,
-                            id: job.id,
+                            companyName: job.ashbyhq_job.companyName,
+                            id: job.ashbyhq_job.id,
                         })
                     }
                 }
@@ -186,7 +114,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
                 let detailI = 0
                 for(let i = 0; i < jobsToCheckDetails.length; i++) {
                     const fetchRow = jobsToCheckDetails[i]
-                    if(fetchRow.longInfo === null) {
+                    if(fetchRow.ashbyhq_job.longInfo === null) {
                         const detail = result.data.jobDetails[detailI]
                         detailI++
                         // I don't know how it conveys that the thing does not exist
@@ -195,12 +123,12 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
 
                         db.update(Job)
                             .set({ longInfo })
-                            .where(D.eq(Job.id, fetchRow.id))
+                            .where(D.eq(Job.id, fetchRow.ashbyhq_job.id))
                             .run()
-                        fetchRow.longInfo = longInfo
+                        fetchRow.ashbyhq_job.longInfo = longInfo
                     }
 
-                    const log = mainLog.addedCtx([fetchRow.companyName], ' job ', [fetchRow.id])
+                    const log = mainLog.addedCtx([fetchRow.ashbyhq_job.companyName], ' job ', [fetchRow.ashbyhq_job.id])
                     promises.push(processJobDetail(db, log, fetchRow))
                 }
 
@@ -211,7 +139,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             }
             finally {
                 for(const it of companiesToCheck) companiesInProcess.delete(it.name)
-                for(const it of jobsToCheckDetails) jobsInProcess.delete(it.id)
+                for(const it of jobsToCheckDetails) jobsInProcess.delete(it.ashbyhq_job.id)
             }
         })()
 
@@ -303,18 +231,18 @@ function checkCompany(
 async function processJobDetail(
     db: BetterSQLite3Database,
     log: L.Log,
-    fetchRow: { id: string, companyName: string, companyTier: string, addedAt: number, jobPostedAfter: number, shortInfo: string, longInfo: string | null },
+    fetchRow: { ashbyhq_job: D.InferSelectModel<typeof Job>, ashby_fetch_job_details: D.InferSelectModel<typeof FetchJobDetails> },
 ) {
-    const shortInfo = JSON.parse(fetchRow.shortInfo)
+    const shortInfo = JSON.parse(fetchRow.ashbyhq_job.shortInfo)
     const job = shortInfo.job
 
     let shouldSend = false
-    if(!fetchRow.longInfo) {
+    if(!fetchRow.ashbyhq_job.longInfo) {
         log.W('Could not get job info. Considering relevant')
         shouldSend = true
     }
     else {
-        const detail = JSON.parse(fetchRow.longInfo)
+        const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
         if(Tiers.isJobDesired(job.title, detail.descriptionHtml ?? undefined) && Tiers.isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
@@ -325,20 +253,20 @@ async function processJobDetail(
     }
 
     if(shouldSend) {
-        const tier = fetchRow.companyTier
+        const tier = fetchRow.ashby_fetch_job_details.companyTier
 
-        const ago = C.millisecToDurationString(Date.now() - fetchRow.jobPostedAfter)
+        const ago = C.millisecToDurationString(Date.now() - fetchRow.ashby_fetch_job_details.jobPostedAfter)
 
         await C.sendMessage(
             log,
             db,
-            job.title + ' @ ' + fetchRow.companyName + '\n'
+            job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
                 + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
-                + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.companyName)}/${encodeURIComponent(fetchRow.id)}`
+                + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
         )
     }
 
-    db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.id, fetchRow.id)).run()
+    db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.id, fetchRow.ashby_fetch_job_details.id)).run()
 }
 
 async function getCompaniesDetails(

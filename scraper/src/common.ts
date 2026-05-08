@@ -1,10 +1,21 @@
 import * as D from 'drizzle-orm'
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
 import * as T from './lib/temporal.ts'
 import * as Db from './lib/db.ts'
+
+type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<V> : never : never
+
+export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany
+    | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany
+export type AnyComany = InferTable<AnyCompanyTable>
+
+export type AnyJobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob
+    | typeof Db.bamboohrJob | typeof Db.zohorecruitJob
+export type AnyJob = InferTable<AnyJobTable>
+
 
 export function selectCompanies<T>(tiers: T[][], probabilities: number[], quota: number): number[] {
     const selectCounts = Array(tiers.length).fill(0)
@@ -166,4 +177,101 @@ export function getOvernightInfo() {
         isOvernight: T.Instant.compare(overnightBegin, now) <= 0
             && T.Instant.compare(now, overnightEnd) < 0,
     }
+}
+
+const typescript1 = <T extends AnyCompanyTable>(db: BetterSQLite3Database, Company: T) => db.select().from(Company).all()
+type GetCompaniesToCheckReturn<T extends AnyCompanyTable> = {
+    missing: ReturnType<typeof typescript1<T>>
+    desired: ReturnType<typeof typescript1<T>>
+    relevant: ReturnType<typeof typescript1<T>>
+    other: ReturnType<typeof typescript1<T>>
+}
+
+export function getCompaniesToCheck<T extends AnyCompanyTable>(
+    db: BetterSQLite3Database,
+    Company: T,
+    companiesToSkip: string[],
+    options?: { quota?: number, weights?: [number, number] }
+): GetCompaniesToCheckReturn<T> {
+    const quota = options?.quota ?? 5
+    const weights = options?.weights ?? [0.5, 0.25]
+
+    const overnightInfo = getOvernightInfo()
+    if(overnightInfo.isOvernight) {
+        const other = db.select().from(Company)
+            .where(D.and(
+                D.eq(Company.exists, 1),
+                D.eq(Company.tier, 3),
+                D.not(D.inArray(Company.name, companiesToSkip)),
+            ))
+            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+            .limit(quota)
+            .all()
+
+        if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
+            return {
+                desired: [],
+                relevant: [],
+                other,
+                missing: [],
+            }
+        }
+    }
+
+    const missing = db.select().from(Company)
+        .where(D.and(
+            D.isNull(Company.exists),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
+
+    const desired = db.select().from(Company)
+        .where(D.and(
+            D.eq(Company.exists, 1),
+            D.eq(Company.tier, 1),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
+    const relevant = db.select().from(Company)
+        .where(D.and(
+            D.eq(Company.exists, 1),
+            D.eq(Company.tier, 2),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
+
+    const tiersCounts = selectCompanies([desired, relevant], weights, quota - missing.length)
+    desired.length = tiersCounts[0]
+    relevant.length = tiersCounts[1]
+
+    return {
+        desired,
+        relevant,
+        other: [],
+        missing,
+    }
+}
+
+export function populateCompanies<T extends AnyCompanyTable>(
+    log: L.Log,
+    db: BetterSQLite3Database,
+    Company: T,
+    companyNames: string[],
+    baseCompanyRecord: Omit<D.InferInsertModel<T>, 'name'>
+) {
+    for(let i = 0; i < companyNames.length; i += 3000) {
+        const toInsert = companyNames.slice(i, i + 3000).map(it => ({ ...baseCompanyRecord, name: it }))
+
+        db.insert(Company)
+            .values(toInsert as any)
+            .onConflictDoNothing()
+            .execute()
+    }
+    log.I('Populated companies')
 }

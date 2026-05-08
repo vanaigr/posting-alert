@@ -11,35 +11,22 @@ import * as C from './common.ts'
 
 const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
 
-const quota = 5
-
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    await (async() => {
-        const companyNames = await import(
-            './sources/zohorecruit/companyNames.json',
-            { with: { type: 'json' }},
-        ).then(it => it.default)
-
-        for(let i = 0; i < companyNames.length; i += 3000) {
-            const toInsert = companyNames
-                .slice(i, i + 3000)
-                .map(it => ({ name: it, checkedEpochMs: null, exists: null, failCount: 0, tier: 0 }))
-
-            db.insert(Company)
-                .values(toInsert)
-                .onConflictDoNothing()
-                .execute()
-        }
-        mainLog.I('Populated companies')
-    })()
+    await import('./sources/zohorecruit/companyNames.json', { with: { type: 'json' } }).then(it => {
+        C.populateCompanies(mainLog, db, Company, it.default, {
+            checkedEpochMs: null,
+            exists: null,
+            tier: 0,
+            failCount: 0,
+        })
+    })
+    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()
     let rateLimit = false
 
     const connection = new Agent({}).compose(interceptors.dns())
-
-    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -52,60 +39,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
-
-            const overnightInfo = C.getOvernightInfo()
-            if(overnightInfo.isOvernight) {
-                const other = db.select().from(Company)
-                    .where(D.and(
-                        D.eq(Company.exists, 1),
-                        D.eq(Company.tier, 3),
-                        D.not(D.inArray(Company.name, companiesToSkip)),
-                    ))
-                    .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                    .limit(quota)
-                    .all()
-
-                if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
-                    return { missing: [], desired: [], relevant: [], other }
-                }
-            }
-
-            const missing = db.select().from(Company)
-                .where(D.and(
-                    D.isNull(Company.exists),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-
-            const desired = db.select().from(Company)
-                .where(D.and(
-                    D.eq(Company.exists, 1),
-                    D.eq(Company.tier, 1),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-            const relevant = db.select().from(Company)
-                .where(D.and(
-                    D.eq(Company.exists, 1),
-                    D.eq(Company.tier, 2),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-
-            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.25], quota - missing.length)
-            desired.length = tiersCounts[0]
-            relevant.length = tiersCounts[1]
-
-            return { missing, desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
-        })()
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], {
+            quota: 4, // too little companies + stalls a lot
+        })
 
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
@@ -399,8 +335,6 @@ function calculateTier(
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
 export function isLocationRelevant(info: JobInfo) {
-    const cityState = info.city + ', ' + info.state
-
     const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
     const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
     const isRemoteInUs = isRemote && isInUs
@@ -499,11 +433,6 @@ function extractJobs(log: L.Log, html: string) {
 
     log.I('Could not find jobs array ', [[' ', [html]], 'extra-details'])
 }
-
-/*
-const jobs = extractJobs(L.makeLogger(), await fetch('https://academicsinasia.zohorecruit.com/jobs/Careers').then(it => it.text()))
-console.log(jobs)
-*/
 
 type JobInfo = {
     title: string

@@ -1,6 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
@@ -14,32 +11,17 @@ import * as C from '../common.ts'
 
 const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
 
-const quota = 5
-
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    ;(() => {
-        const companyNames: string[] = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'sources', 'companyNames.json')).toString())
-
-        for(let i = 0; i < companyNames.length; i += 3000) {
-            const toInsert = companyNames
-                .slice(i, i + 3000)
-                .map(it => ({ name: it, checkedEpochMs: null, exists: null }))
-
-            db.insert(Company)
-                .values(toInsert)
-                .onConflictDoNothing()
-                .execute()
-        }
-        mainLog.I('Populated companies')
-    })()
+    await import('./sources/companyNames.json', { with: { type: 'json' } }).then(it => {
+        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+    })
+    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()
     let rateLimit = false
 
     const connection = new Agent({}).compose(interceptors.dns())
-
-    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -52,56 +34,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = (() => {
-            const companiesToSkip = [...companiesInProcess, ...C.bannedCompanies]
-
-            const overnightInfo = C.getOvernightInfo()
-            if(overnightInfo.isOvernight) {
-                const other = db.select().from(Company)
-                    .where(D.and(
-                        D.eq(Company.exists, 1),
-                        D.eq(Company.tier, 3),
-                        D.not(D.inArray(Company.name, companiesToSkip)),
-                    ))
-                    .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                    .limit(quota)
-                    .all()
-
-                if(other.length !== 0 && (other[0].checkedEpochMs === null || other[0].checkedEpochMs < overnightInfo.overnightBegin)) {
-                    return { desired: [], relevant: [], other }
-                }
-            }
-
-            const desired = db.select().from(Company)
-                .where(D.and(
-                    D.or(
-                        D.isNull(Company.exists),
-                        D.and(
-                            D.eq(Company.exists, 1),
-                            D.eq(Company.tier, 1),
-                        ),
-                    ),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-            const relevant = db.select().from(Company)
-                .where(D.and(
-                    D.eq(Company.exists, 1),
-                    D.eq(Company.tier, 2),
-                    D.not(D.inArray(Company.name, companiesToSkip)),
-                ))
-                .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-                .limit(quota)
-                .all()
-
-            const tiersCounts = C.selectCompanies([desired, relevant], [0.5, 0.25], quota)
-            desired.length = tiersCounts[0]
-            relevant.length = tiersCounts[1]
-
-            return { desired, relevant, other: [] as D.InferSelectModel<typeof Company>[] }
-        })()
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies])
 
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
@@ -116,6 +49,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             [toCheck.desired.length], ', ',
             [toCheck.relevant.length], ', ',
             [toCheck.other.length], ', ',
+            [toCheck.missing.length], ', ',
         )
 
         const currentTime = Date.now()
@@ -138,6 +72,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         for(const it of toCheck.desired) handleCompanny(it, 'I')
         for(const it of toCheck.relevant) handleCompanny(it, 'II')
         for(const it of toCheck.other) handleCompanny(it, 'III')
+        for(const it of toCheck.missing) handleCompanny(it, '?')
 
         for(const { bamboohr_fetch_job_details, bamboohr_job } of jobsToCheckDetails) {
             const log = mainLog.addedCtx([bamboohr_fetch_job_details.companyName], ' job ', [bamboohr_fetch_job_details.id])
@@ -420,9 +355,6 @@ function calculateTier(
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
 export function isLocationRelevant(info: FetchJob) {
-    const cityState = (info.atsLocation.city || info.location.city || '')
-        + ', ' + (info.atsLocation.state || info.location.state || '')
-
     const isInUs = info.atsLocation.country !== null
         && (
             info.atsLocation.country === 'US'
