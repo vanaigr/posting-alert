@@ -5,13 +5,13 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from './lib/db.ts'
 import * as L from './lib/log.ts'
-import * as U from './lib/util.ts'
+import * as C from './common.ts'
 import * as Ashbyhq from './ashbyhq/run.ts'
 import * as Lever from './lever/run.ts'
 import * as Greenhouse from './greenhouse/run.ts'
 import * as Bamboohr from './bamboohr/run.ts'
 import * as Zohorecruit from './zohorecruit.ts'
-import * as C from './common.ts'
+import * as Gem from './gem.ts'
 
 let mainLog: L.Log | undefined
 
@@ -32,12 +32,13 @@ async function main() {
     Db.migrate(db)
 
     await Promise.race([
-        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        Lever.run(db, mainLog.addedCtx('lever')),
-        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
-        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
-        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
+        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
+        //Lever.run(db, mainLog.addedCtx('lever')),
+        //Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        //Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        //Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
+        Gem.run(db, mainLog.addedCtx('gem')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')
