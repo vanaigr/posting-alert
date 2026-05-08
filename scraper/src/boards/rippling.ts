@@ -282,7 +282,7 @@ async function request<T>(log: L.Log, connection: N.Connection, path: string) {
             await response.body.text().catch(() => {})
             return U.status('rate-limit')
         }
-        if(response.statusCode === 404) {
+        if(response.statusCode === 400 || response.statusCode === 404) {
             await response.body.text().catch(() => {})
             return U.status('not-found')
         }
