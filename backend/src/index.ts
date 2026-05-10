@@ -112,15 +112,27 @@ async function main() {
             }
             // TODO: there's also embed url
             else if(url.hostname === 'job-boards.greenhouse.io') {
-                const segments = url.pathname.split('/')
-                const companyName = segments[1]
-                const jobId = segments[3]
-                log.I('Greenhouse with ', [companyName], ', ', [jobId])
-                if(!companyName || !jobId) {
-                    return c.json({}, { status: 400 })
-                }
+                if(url.pathname.startsWith('/embed/job_app')) {
+                    const companyName = url.searchParams.get('for')
+                    const jobId = url.searchParams.get('token')
+                    log.I('Greenhouse embed with ', [companyName], ', ', [jobId])
+                    if(!companyName || !jobId) {
+                        return c.json({}, { status: 400 })
+                    }
 
-                return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+                    return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+                }
+                else {
+                    const segments = url.pathname.split('/')
+                    const companyName = segments[1]
+                    const jobId = segments[3]
+                    log.I('Greenhouse with ', [companyName], ', ', [jobId])
+                    if(!companyName || !jobId) {
+                        return c.json({}, { status: 400 })
+                    }
+
+                    return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+                }
             }
             else if(url.hostname.endsWith('.bamboohr.com')) {
                 const segments = url.pathname.split('/')
