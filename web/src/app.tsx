@@ -24,6 +24,7 @@ export type Check = {
     } | null
     job: {
         fetchedEpochMs: number | null
+        publishedEpochMs: number | null
         locationRelevant: boolean
         locationDesired: boolean
         jobRelevant: boolean
@@ -290,7 +291,8 @@ function CheckResult({ data }: { data: Check }) {
             {!job
                 ? <div className='text-slate-400'>Not in DB</div>
                 : <ul className='text-xs space-y-0.5 text-slate-300'>
-                    <li>Fetched: {job.fetchedEpochMs === null ? '—' : new Date(job.fetchedEpochMs).toLocaleString()}</li>
+                    <li>Fetched: {job.fetchedEpochMs == null ? '—' : new Date(job.fetchedEpochMs).toLocaleString()}</li>
+                    <li>Published: {job.publishedEpochMs == null ? '—' : new Date(job.publishedEpochMs).toLocaleString()}</li>
                     <li>Location relevant: {String(job.locationRelevant)}</li>
                     <li>Location desired: {String(job.locationDesired)}</li>
                     <li>Job relevant: {String(job.jobRelevant)}</li>

@@ -23,6 +23,7 @@ type CompanyParams = {
 
 type JobParams = {
     fetchedEpochMs: number | null
+    publishedEpochMs: number | null
     locationRelevant: boolean
     locationDesired: boolean
     jobRelevant: boolean
@@ -64,6 +65,7 @@ export function ashbyhqGetPostingParams(db: BetterSQLite3Database, companyName: 
 
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: longInfo?.publishedDate ? new Date(longInfo.publishedDate).getTime() : null,
                 locationRelevant: AshbyTiers.isLocationRelevant(ashbyJob),
                 locationDesired: AshbyTiers.isLocationDesired(ashbyJob),
                 jobRelevant: AshbyTiers.isJobRelevant(ashbyJob.title),
@@ -84,6 +86,7 @@ export function leverGetPostingParams(db: BetterSQLite3Database, companyName: st
 
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: typeof info.createdAt === 'number' ? info.createdAt : null,
                 locationRelevant: Lever.isLocationRelevant(info),
                 locationDesired: Lever.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.text),
@@ -103,6 +106,7 @@ export function greenhouseGetPostingParams(db: BetterSQLite3Database, companyNam
             const info = JSON.parse(job.info)
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: new Date(info.updated_at).getTime(),
                 locationRelevant: Greenhouse.isLocationRelevant(info),
                 locationDesired: Greenhouse.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.title),
@@ -123,6 +127,7 @@ export function bamboohrGetPostingParams(db: BetterSQLite3Database, companyName:
             const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: null,
                 locationRelevant: Bamboohr.isLocationRelevant(info),
                 locationDesired: Bamboohr.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.jobOpeningName),
@@ -143,6 +148,7 @@ export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyNa
             const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: null,
                 locationRelevant: Zohorecruit.isLocationRelevant(info),
                 locationDesired: Zohorecruit.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.title),
@@ -162,6 +168,7 @@ export function gemGetPostingParams(db: BetterSQLite3Database, companyName: stri
             const info: Gem.JobInfo = JSON.parse(job.info)
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: null,
                 locationRelevant: Gem.isLocationRelevant(info),
                 locationDesired: Gem.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.title),
@@ -182,6 +189,7 @@ export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName:
             const longInfo: Rippling.LongInfo | null = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: longInfo?.createdOn ? new Date(longInfo.createdOn).getTime() : null,
                 locationRelevant: Rippling.isLocationRelevant(info),
                 locationDesired: Rippling.isLocationDesired(info),
                 jobRelevant: AshbyTiers.isJobRelevant(info.title),
@@ -249,6 +257,9 @@ if(import.meta.main) {
         console.log('Job exists: YES')
 
         console.log('  Fetched at: ' + (job.fetchedEpochMs === null ? null : formatTime(job.fetchedEpochMs)))
+        if(job.publishedEpochMs !== undefined) {
+            console.log('  Published at: ' + (job.publishedEpochMs === null ? null : formatTime(job.publishedEpochMs)))
+        }
         console.log('  Location relevant: ' + job.locationRelevant)
         console.log('  Location desired: ' + job.locationDesired)
         console.log('  Job relevant: ' + job.jobRelevant)
