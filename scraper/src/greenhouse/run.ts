@@ -124,13 +124,14 @@ async function checkCompany(
                 log.I('Job ', id, ' is relevant!')
 
                 const ago = C.millisecToDurationString(Date.now() - (new Date(job.updated_at).getTime() || 0))
+                const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
 
                 promises.push(C.sendMessage(
                     log.addedCtx('job ', [id]),
                     db,
                     job.title + ' @ ' + company.name + '\n'
                         + (job.location?.name ?? '') + '\n'
-                        + `GH ${tier} ${ago} ago: ` + job.absolute_url,
+                        + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url,
                 ))
             }
         }

@@ -132,13 +132,14 @@ async function checkCompany(
                 log.I('Job ', job.id, ' is relevant!')
 
                 const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
+                const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
 
                 promises.push(C.sendMessage(
                     log.addedCtx('job ', [job.id]),
                     db,
                     job.text + ' @ ' + company.name + '\n'
                         + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
-                        + `Lever ${tier} ${ago} ago: ` + (job.hostedUrl || job.applyUrl),
+                        + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
                 ))
             }
         }

@@ -135,7 +135,7 @@ async function checkCompany(
             if(AshbyTiers.isJobDesired(jobInfo.title, jobInfo.descriptionHtml) && isLocationDesired(jobInfo)) {
                 log.I('Job ', id, ' is relevant!')
 
-                const ago = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
+                const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
                 const locations = jobInfo.locations.map(it => {
                     const city = [...new Set([it.name, it.city])].filter(it => it).join(' - ')
                     return (it.isRemote ? 'Remote ' : '') + city + ', ' + it.isoCountry
@@ -146,7 +146,7 @@ async function checkCompany(
                     db,
                     jobInfo.title + ' @ ' + company.name + '\n'
                         + locations.join(' | ') + '\n'
-                        + `Gem ${tier} < ${ago} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${rawJob.extId}`,
+                        + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${rawJob.extId}`,
                 ))
             }
         }

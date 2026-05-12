@@ -258,16 +258,25 @@ async function processJobDetail(
     }
 
     if(shouldSend) {
-        const exactTime = longInfo ? new Date(longInfo.createdOn).getTime() : 0
+        const maxAgo = C.millisecToDurationString(Date.now() - fetchDetails.jobPostedAfter)
+        const agoString = (() => {
+            const exactTime = longInfo ? new Date(longInfo.createdOn).getTime() : 0
+            if(exactTime) {
+                const ago = C.millisecToDurationString(Date.now() - exactTime)
+                return `${ago} (< ${maxAgo}) ago`
+            }
+            else {
+                return `< ${maxAgo} ago`
+            }
 
-        const ago = C.millisecToDurationString(Date.now() - (exactTime || fetchDetails.jobPostedAfter || 0))
+        })()
 
         await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
             jobInfo.title + ' @ ' + dbJob.companyName + '\n'
                 + jobInfo.locations.join(' | ') + '\n'
-                + `Rippling ${fetchDetails.companyTier} ${exactTime ? '' : '< '}${ago} ago: ` + jobInfo.url,
+                + `Rippling ${fetchDetails.companyTier} ${agoString}: ` + jobInfo.url,
         )
     }
 

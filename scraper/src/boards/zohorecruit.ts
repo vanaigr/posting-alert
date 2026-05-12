@@ -273,14 +273,15 @@ async function processJobDetail(
 
         const location = [job.city, job.country].filter(it => it).join(', ') || 'none'
 
-        const ago = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
+        const maxAgo = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
         await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
             job.title + ' @ ' + dbJob.companyName + '\n'
                 + workplaceType + ': ' + location + '\n'
-                + `Zoho ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
+                + `Zoho ${fetchDetails.companyTier} < ${maxAgo} ago: `
+                + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
         )
     }
 

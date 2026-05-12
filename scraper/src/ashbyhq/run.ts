@@ -255,14 +255,15 @@ async function processJobDetail(
     if(shouldSend) {
         const tier = fetchRow.ashby_fetch_job_details.companyTier
 
-        const ago = C.millisecToDurationString(Date.now() - fetchRow.ashby_fetch_job_details.jobPostedAfter)
+        const maxAgo = C.millisecToDurationString(Date.now() - fetchRow.ashby_fetch_job_details.jobPostedAfter)
 
         await C.sendMessage(
             log,
             db,
             job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
                 + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
-                + `Ashby ${tier} < ${ago} ago: ` + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
+                + `Ashby ${tier} < ${maxAgo} ago: `
+                + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
         )
     }
 

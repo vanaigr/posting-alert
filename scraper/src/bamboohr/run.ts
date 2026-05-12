@@ -264,14 +264,15 @@ async function processJobDetail(
             job.atsLocation.country,
         ].filter(it => it !== null).join(', ') || 'none'
 
-        const ago = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
+        const maxAgo = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
         await C.sendMessage(
             log.addedCtx('job ', [job.id]),
             db,
             job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
                 + workplaceType + ': ' + location + '\n'
-                + `Bamboo ${fetchDetails.companyTier} < ${ago} ago: ` + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+                + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
+                + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
         )
     }
 
