@@ -5,17 +5,17 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
-import * as Tiers from './tier.ts'
+import * as Tier from '../tier/index.ts'
 import * as N from '../lib/network.ts'
 import * as C from '../common.ts'
 
 const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    await import('./sources/companyNames.json', { with: { type: 'json' } }).then(it => {
+    await import('../sources/ashbyhq/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
-    C.evaluateTiers(mainLog, db, Company, Job, Tiers.calculateTier)
+    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProcess = new Set<string>()
@@ -191,7 +191,7 @@ function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tiers.isJobDesired(job.title, undefined) && Tiers.isLocationDesired(job)) {
+            if(Tier.isJobDesired(job.title, undefined) && isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     id: job.id,
@@ -204,7 +204,7 @@ function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? Tiers.calculateTier(company, [...existingJobsRows, ...toInsert])
+        ? calculateTier(company, [...existingJobsRows, ...toInsert])
         : null
 
     db.transaction(db => {
@@ -243,7 +243,7 @@ async function processJobDetail(
     }
     else {
         const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
-        if(Tiers.isJobDesired(job.title, detail.descriptionHtml ?? undefined) && Tiers.isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.title, detail.descriptionHtml ?? undefined) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -261,7 +261,7 @@ async function processJobDetail(
             log,
             db,
             job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
-                + job.workplaceType + ': ' + Tiers.getJobLocations(job).join(' | ') + '\n'
+                + job.workplaceType + ': ' + getJobLocations(job).join(' | ') + '\n'
                 + `Ashby ${tier} < ${maxAgo} ago: `
                 + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
         )
@@ -436,3 +436,48 @@ type ApiJobPosting = null | {
     compensationTierSummary: string | null
 }
 
+export function calculateTier(
+    _company: D.InferSelectModel<typeof Company>,
+    jobs: D.InferSelectModel<typeof Job>[],
+): number {
+    let hasRelevantLocation = false
+    for(const job of jobs) {
+        const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
+        if(!infoRaw) continue
+        if(!isLocationRelevant(infoRaw)) continue
+        hasRelevantLocation = true
+        if(Tier.isJobRelevant(infoRaw.title)) return 1
+    }
+    return hasRelevantLocation ? 2 : 3
+}
+
+export function getJobLocations(job: any) {
+    return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
+}
+// Unfortunately ashbyhq does not give a way to get job description in 1 request with job list (and I don't want to half our throughput),
+// so we don't have the JD, and have to be more lenient.
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
+export function isLocationRelevant(job: any) {
+    return getJobLocations(job).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+
+        return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
+    })
+}
+export function isLocationDesired(job: any) {
+    return getJobLocations(job).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+        const onSite = !isRemote && (job.workplaceType === 'OnSite' || job.workplaceType === 'Hybrid')
+
+        return isRemoteInUs || isRemoteWorldwide || isMyLocal || ((mentionsUs || mentionsUsConcrete) && !(mentionsUsConcrete && onSite))
+    })
+}

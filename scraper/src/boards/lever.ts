@@ -6,13 +6,13 @@ import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as N from '../lib/network.ts'
-import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as Tier from '../tier/index.ts'
 import * as C from '../common.ts'
 
-const { gCompany: Company, gJob: Job } = Db
+const { lCompany: Company, lJob: Job } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    await import('./sources/companyNames.json', { with: { type: 'json' } }).then(it => {
+    await import('../sources/lever/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
     C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
@@ -20,7 +20,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     const companiesInProcess = new Set<string>()
     let rateLimit = false
 
-    const connection = N.createConnection('https://boards-api.greenhouse.io', { connections: 30 })
+    const connection = N.createConnection('https://jobs.lever.co', { connections: 30 })
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
@@ -108,30 +108,38 @@ async function checkCompany(
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const promises: Promise<void>[] = []
     for(const job of result.data) {
-        const id = String(job.id)
-        if(existingJobs.has(id)) continue
+        if(existingJobs.has(job.id)) continue
 
         toInsert.push({
-            id,
+            id: job.id,
             companyName: company.name,
             fetchedEpochMs: currentTime,
-            info: JSON.stringify(job),
+            info: JSON.stringify({
+                applyUrl: job.applyUrl,
+                categories: job.categories,
+                country: job.country,
+                createdAt: job.createdAt,
+                hostedUrl: job.hostedUrl,
+                text: job.text,
+                workplaceType: job.workplaceType,
+                descriptionPlain: job.descriptionPlain,
+            } satisfies JobInfo),
         })
 
         if(!initial) {
-            log.I('New job ', [id])
-            if(AshbyTiers.isJobDesired(job.title, job.content) && isLocationDesired(job)) {
-                log.I('Job ', id, ' is relevant!')
+            log.I('New job ', [job.id])
+            if(Tier.isJobDesired(job.text, job.descriptionPlain) && isLocationDesired(job)) {
+                log.I('Job ', job.id, ' is relevant!')
 
-                const ago = C.millisecToDurationString(Date.now() - (new Date(job.updated_at).getTime() || 0))
+                const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
                 const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
 
                 promises.push(C.sendMessage(
-                    log.addedCtx('job ', [id]),
+                    log.addedCtx('job ', [job.id]),
                     db,
-                    job.title + ' @ ' + company.name + '\n'
-                        + (job.location?.name ?? '') + '\n'
-                        + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url,
+                    job.text + ' @ ' + company.name + '\n'
+                        + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
+                        + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
                 ))
             }
         }
@@ -165,10 +173,10 @@ async function checkCompany(
 
 async function requestCompany(log: L.Log, connection: N.Connection, companyName: string) {
     try {
-        // https://github.com/grnhse/greenhouse-api-docs/blob/2e9f2d8a573a6843c838cd5f4050f57f23f0494d/source/includes/job-board/_jobs.md?plain=1#L1
+        // https://github.com/plibither8/jobber/blob/4e079f745526a002463972d99fbbc9825ff0ce13/src/boards/lever.ts#L12
         const response = await N.fetch(connection, {
             method: 'GET',
-            path: '/v1/boards/' + encodeURIComponent(companyName) + '/jobs?content=true',
+            path: '/v0/postings/' + encodeURIComponent(companyName),
         })
         if(response.statusCode === 429) {
             log.E('Rate limited')
@@ -185,8 +193,8 @@ async function requestCompany(log: L.Log, connection: N.Connection, companyName:
             return U.status('error')
         }
 
-        const json = await response.body.json() as { jobs: Job[] }
-        return U.result('ok', json.jobs)
+        const json = await response.body.json() as FetchJob[]
+        return U.result('ok', json)
     }
     catch(err) {
         log.E('While requesting: ', [err])
@@ -194,59 +202,33 @@ async function requestCompany(log: L.Log, connection: N.Connection, companyName:
     }
 }
 
-type Job = {
-    id: number
-    internal_job_id: number | null
-    title: string
-    updated_at: string
-    requisition_id?: string
-    location: { name: string }
-    absolute_url: string
-    language?: string
-    metadata: unknown
-    content?: string // html
-    departments?: { id: number; name: string; parent_id: number | null; child_ids: number[] }[]
-    offices?: { id: number; name: string; location: string; parent_id: number | null; child_ids: number[] }[]
-}
-
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
-export function isLocationRelevant(job: { location: { name: string }, content?: string }) {
-    const location = job.location.name
-    const content = job.content
-    if(!location) {
-        return true
-    }
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
-    const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-
-    return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
-}
-
-export function isLocationDesired(job: { location: { name: string }, content?: string }) {
-    const location = job.location.name
-    const content = job.content
-    if(!location) {
-        console.log('missing location for', job)
-        return true
-    }
-    if(!content) {
-        // This is not supposed to happen because this is only used for new jobs,
-        // and all new jobs are fetched with content.
-        console.log('Missing content for', job)
-    }
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    const mentionsUsConcrete = AshbyTiers.citiesStatesRegex1.test(location) || AshbyTiers.citiesStatesRegex2.test(location)
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (content && /remote/i.test(content))
-    const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-
-    return isRemoteInUs || isRemoteWorldwide || isMyLocal
+export type FetchJob = {
+    additionalPlain: string
+    additional: string
+    categories: {
+        commitment: string
+        department: string
+        location: string
+        team: string
+        allLocations: string[]
+    },
+    createdAt: number
+    descriptionPlain: string
+    description: string
+    id: string
+    lists: {
+        text: string
+        content: string
+    }[]
+    text: string
+    country: string
+    workplaceType: string
+    opening: string
+    openingPlain: string
+    descriptionBody: string
+    descriptionBodyPlain: string
+    hostedUrl: string
+    applyUrl: string
 }
 
 function calculateTier(
@@ -255,11 +237,65 @@ function calculateTier(
 ): number {
     let hasRelevantLocation = false
     for(const job of jobs) {
-        const info: Job | null = JSON.parse(job.info ?? 'null')
+        const info: JobInfo | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.title)) return 1
+        if(Tier.isJobRelevant(info.text)) return 1
     }
     return hasRelevantLocation ? 2 : 3
+}
+
+// NOTE: if this is changed, add a migration that resets tiers for the companies.
+export function isLocationRelevant(info: JobInfo) {
+    return getLocations(info).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+            || info.country === 'US' || info.country === null
+        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+
+        return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
+    })
+}
+
+// NOTE: assumes info.descriptionPlain exists
+export function isLocationDesired(info: JobInfo) {
+    return getLocations(info).some(location => {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+            || info.country === 'US' || info.country === null
+        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
+            || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
+        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
+        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+
+        return isRemoteInUs || isRemoteWorldwide || isMyLocal
+    })
+}
+
+function getLocations(info: JobInfo) {
+    return [
+        ...(info.categories.location ? [info.categories.location] : []),
+        ...(info.categories.allLocations ?? []),
+    ]
+}
+
+type JobInfo = {
+    applyUrl: string
+    categories: {
+        allLocations: string[]
+        commitment: string
+        department: string
+        location: string
+        team: string
+    }
+    descriptionPlain?: string
+    country: string | null // 2 letter country code, or multiple
+    createdAt: number // epoch ms
+    hostedUrl: string
+    text: string // title
+    workplaceType: string
 }

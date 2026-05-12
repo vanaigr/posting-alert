@@ -5,7 +5,7 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
-import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as Tier from '../tier/index.ts'
 import * as N from '../lib/network.ts'
 import * as C from '../common.ts'
 
@@ -132,7 +132,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [id])
-            if(AshbyTiers.isJobDesired(jobInfo.title, jobInfo.descriptionHtml) && isLocationDesired(jobInfo)) {
+            if(Tier.isJobDesired(jobInfo.title, jobInfo.descriptionHtml) && isLocationDesired(jobInfo)) {
                 log.I('Job ', id, ' is relevant!')
 
                 const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
@@ -239,7 +239,7 @@ function calculateTier(
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.title)) return 1
+        if(Tier.isJobRelevant(info.title)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }

@@ -6,13 +6,13 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
-import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as Tier from '../tier/index.ts'
 import * as C from '../common.ts'
 
 const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
-    await import('./sources/companyNames.json', { with: { type: 'json' } }).then(it => {
+    await import('../sources/bamboohr/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, {
             checkedEpochMs: null,
             exists: null,
@@ -166,7 +166,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(AshbyTiers.isJobDesired(job.jobOpeningName, undefined) && isLocationDesired(job)) {
+            if(Tier.isJobDesired(job.jobOpeningName, undefined) && isLocationDesired(job)) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     uniqueId: U.getHash(company.name, job.id),
@@ -239,7 +239,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(AshbyTiers.isJobDesired(job.jobOpeningName, longInfo.description) && isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.jobOpeningName, longInfo.description) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -354,7 +354,7 @@ function calculateTier(
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.jobOpeningName)) return 1
+        if(Tier.isJobRelevant(info.jobOpeningName)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }

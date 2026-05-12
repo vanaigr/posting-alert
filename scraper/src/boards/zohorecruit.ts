@@ -6,7 +6,7 @@ import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
-import * as AshbyTiers from '../ashbyhq/tier.ts'
+import * as Tier from '../tier/index.ts'
 import * as C from '../common.ts'
 
 const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
@@ -183,7 +183,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [rawJob.id])
-            if(AshbyTiers.isJobDesired(jobInfo.title, undefined) && isLocationDesired(jobInfo)) {
+            if(Tier.isJobDesired(jobInfo.title, undefined) && isLocationDesired(jobInfo)) {
                 log.I('Job ', rawJob.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     uniqueId: U.getHash(company.name, rawJob.id),
@@ -256,7 +256,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(AshbyTiers.isJobDesired(job.title, longInfo.description) && isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.title, longInfo.description) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -330,7 +330,7 @@ function calculateTier(
         if(!info) continue
         if(!isLocationRelevant(info)) continue
         hasRelevantLocation = true
-        if(AshbyTiers.isJobRelevant(info.title)) return 1
+        if(Tier.isJobRelevant(info.title)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }

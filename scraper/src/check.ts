@@ -6,10 +6,11 @@ import * as D from 'drizzle-orm'
 import * as Db from './lib/db.ts'
 import * as T from './lib/temporal.ts'
 import * as C from './common.ts'
-import * as AshbyTiers from './ashbyhq/tier.ts'
-import * as Lever from './lever/run.ts'
-import * as Greenhouse from './greenhouse/run.ts'
-import * as Bamboohr from './bamboohr/run.ts'
+import * as Tier from './tier/index.ts'
+import * as Ashbyhq from './boards/ashbyhq.ts'
+import * as Lever from './boards/lever.ts'
+import * as Greenhouse from './boards/greenhouse.ts'
+import * as Bamboohr from './boards/bamboohr.ts'
 import * as Zohorecruit from './boards/zohorecruit.ts'
 import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
@@ -66,10 +67,10 @@ export function ashbyhqGetPostingParams(db: BetterSQLite3Database, companyName: 
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: longInfo?.publishedDate ? new Date(longInfo.publishedDate).getTime() : null,
-                locationRelevant: AshbyTiers.isLocationRelevant(ashbyJob),
-                locationDesired: AshbyTiers.isLocationDesired(ashbyJob),
-                jobRelevant: AshbyTiers.isJobRelevant(ashbyJob.title),
-                jobDesired: AshbyTiers.isJobDesired(ashbyJob.title, description),
+                locationRelevant: Ashbyhq.isLocationRelevant(ashbyJob),
+                locationDesired: Ashbyhq.isLocationDesired(ashbyJob),
+                jobRelevant: Tier.isJobRelevant(ashbyJob.title),
+                jobDesired: Tier.isJobDesired(ashbyJob.title, description),
             }
         })(),
     }
@@ -89,8 +90,8 @@ export function leverGetPostingParams(db: BetterSQLite3Database, companyName: st
                 publishedEpochMs: typeof info.createdAt === 'number' ? info.createdAt : null,
                 locationRelevant: Lever.isLocationRelevant(info),
                 locationDesired: Lever.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.text),
-                jobDesired: AshbyTiers.isJobDesired(info.text, info.descriptionPlain),
+                jobRelevant: Tier.isJobRelevant(info.text),
+                jobDesired: Tier.isJobDesired(info.text, info.descriptionPlain),
             }
         })(),
     }
@@ -109,8 +110,8 @@ export function greenhouseGetPostingParams(db: BetterSQLite3Database, companyNam
                 publishedEpochMs: new Date(info.updated_at).getTime(),
                 locationRelevant: Greenhouse.isLocationRelevant(info),
                 locationDesired: Greenhouse.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.title),
-                jobDesired: AshbyTiers.isJobDesired(info.title, info.content),
+                jobRelevant: Tier.isJobRelevant(info.title),
+                jobDesired: Tier.isJobDesired(info.title, info.content),
             }
         })(),
     }
@@ -130,8 +131,8 @@ export function bamboohrGetPostingParams(db: BetterSQLite3Database, companyName:
                 publishedEpochMs: null,
                 locationRelevant: Bamboohr.isLocationRelevant(info),
                 locationDesired: Bamboohr.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.jobOpeningName),
-                jobDesired: AshbyTiers.isJobDesired(info.jobOpeningName, longInfo?.description),
+                jobRelevant: Tier.isJobRelevant(info.jobOpeningName),
+                jobDesired: Tier.isJobDesired(info.jobOpeningName, longInfo?.description),
             }
         })(),
     }
@@ -151,8 +152,8 @@ export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyNa
                 publishedEpochMs: null,
                 locationRelevant: Zohorecruit.isLocationRelevant(info),
                 locationDesired: Zohorecruit.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.title),
-                jobDesired: AshbyTiers.isJobDesired(info.title, longInfo?.description),
+                jobRelevant: Tier.isJobRelevant(info.title),
+                jobDesired: Tier.isJobDesired(info.title, longInfo?.description),
             }
         })(),
     }
@@ -171,8 +172,8 @@ export function gemGetPostingParams(db: BetterSQLite3Database, companyName: stri
                 publishedEpochMs: null,
                 locationRelevant: Gem.isLocationRelevant(info),
                 locationDesired: Gem.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.title),
-                jobDesired: AshbyTiers.isJobDesired(info.title, info.descriptionHtml),
+                jobRelevant: Tier.isJobRelevant(info.title),
+                jobDesired: Tier.isJobDesired(info.title, info.descriptionHtml),
             }
         })(),
     }
@@ -192,8 +193,8 @@ export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName:
                 publishedEpochMs: longInfo?.createdOn ? new Date(longInfo.createdOn).getTime() : null,
                 locationRelevant: Rippling.isLocationRelevant(info),
                 locationDesired: Rippling.isLocationDesired(info),
-                jobRelevant: AshbyTiers.isJobRelevant(info.title),
-                jobDesired: AshbyTiers.isJobDesired(info.title, longInfo?.descriptionHtml),
+                jobRelevant: Tier.isJobRelevant(info.title),
+                jobDesired: Tier.isJobDesired(info.title, longInfo?.descriptionHtml),
             }
         })(),
     }
