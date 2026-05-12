@@ -49,12 +49,12 @@ const titleRegex = /(engineer|developer|programmer)/i
 export function isJobRelevant(title: string) {
     return titleRegex.test(title)
         && !(
-            /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design)( (reliability|field))? engineer/i.test(title)
+            /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design|devops)( (reliability|field))? engineer/i.test(title)
         )
 }
 
 export function isJobDesired(title: string, description: string | undefined) {
-    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|servicenow)\b/i.test(title)
+    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality assurance|machine learning|head of|servicenow)\b/i.test(title)
         || /\b(UX)\b/.test(title)
     if(ignoreTitle) return false
 

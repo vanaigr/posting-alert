@@ -540,6 +540,20 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`PRAGMA user_version = 22`)
         }
     })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 22) {
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`update gem_company set tier = 0`)
+            tx.run(sql`update rippling_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 23`)
+        }
+    })
 }
 
 
