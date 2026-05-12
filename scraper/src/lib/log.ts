@@ -33,7 +33,12 @@ type FileLog = {
   current: Promise<unknown> | undefined;
   pending: string;
   path: string;
+  sinceCheck: number;
 };
+
+const ROTATE_CHECK_INTERVAL = 1000 * 1000
+const ROTATE_MAX_SIZE = 100 * 1024 * 1024
+
 function writeFileLog(it: FileLog) {
     if (it.current || !it.pending) return
 
@@ -41,14 +46,28 @@ function writeFileLog(it: FileLog) {
         const pending = it.pending
         it.pending = ''
         try {
+            if (it.sinceCheck >= ROTATE_CHECK_INTERVAL) {
+                it.sinceCheck = 0
+                try {
+                    const stat = await fsp.stat(it.path)
+                    if (stat.size > ROTATE_MAX_SIZE) {
+                        await fsp.rename(it.path, it.path + '.0')
+                    }
+                }
+                catch(err) {
+                    if((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+                }
+            }
             const file = await fsp.open(it.path, 'a')
             try {
                 await file.write(pending)
-            } finally {
+            }
+            finally {
                 await file.close()
             }
+            it.sinceCheck += pending.length
         }
-        catch (err) {
+        catch(err) {
             it.pending = pending + it.pending
             throw err
         }
@@ -78,6 +97,7 @@ export function makeLogger(
       current: undefined,
       pending: '',
       path: logPath,
+      sinceCheck: ROTATE_CHECK_INTERVAL,
     };
   })();
 
