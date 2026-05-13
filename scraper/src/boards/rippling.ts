@@ -248,7 +248,7 @@ async function processJobDetail(
         shouldSend = true
     }
     else {
-        if(Tier.isJobDesired(jobInfo.title, longInfo.descriptionHtml) && isLocationDesired(jobInfo)) {
+        if(Tier.isJobDesired(jobInfo.title, C.parseHtml(longInfo.descriptionHtml)) && isLocationDesired(jobInfo)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }

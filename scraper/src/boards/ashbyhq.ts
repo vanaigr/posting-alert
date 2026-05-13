@@ -243,7 +243,7 @@ async function processJobDetail(
     }
     else {
         const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
-        if(Tier.isJobDesired(job.title, detail.descriptionHtml ?? undefined) && isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }

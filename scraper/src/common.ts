@@ -1,5 +1,6 @@
 import * as D from 'drizzle-orm'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import * as htmlparser2 from 'htmlparser2'
 
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
@@ -324,4 +325,41 @@ export async function fetchGraphql<T extends {}>(connection: N.Connection, log: 
         log.E('Request failed: ', [err])
         return U.status('error')
     }
+}
+
+//const barrier = Symbol()
+export function parseHtml(html: string) {
+    const resultParts: string[] = []
+    const parser2 = new htmlparser2.Parser({
+        ontext: (text) => {
+            text = text.trim()
+            if(text) resultParts.push(text)
+        },
+    })
+    parser2.write(html)
+    parser2.end()
+    const result = resultParts.join(' ')
+
+    return result
+
+    /*
+    const resultParts: (string | typeof barrier)[] = []
+    const parser2 = new htmlparser2.Parser({
+        ontext: (text) => {
+            text = text.trim()
+            if(text) resultParts.push(text)
+        },
+        onopentag: () => {
+            if(resultParts.at(-1) !== barrier) resultParts.push(barrier)
+        },
+        onclosetag: () => {
+            if(resultParts.at(-1) !== barrier) resultParts.push(barrier)
+        },
+    })
+    parser2.write(html)
+    parser2.end()
+    const result = resultParts.map(it => it === barrier ? ' ' : it).join('')
+
+    return result
+    */
 }

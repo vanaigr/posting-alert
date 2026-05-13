@@ -1,5 +1,6 @@
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import * as htmlparser2 from 'htmlparser2'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -120,7 +121,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [id])
-            if(Tier.isJobDesired(job.title, job.content) && isLocationDesired(job)) {
+            if(Tier.isJobDesired(job.title, job.content ? parseJobContent(job.content) : undefined) && isLocationDesired(job)) {
                 log.I('Job ', id, ' is relevant!')
 
                 const ago = C.millisecToDurationString(Date.now() - (new Date(job.updated_at).getTime() || 0))
@@ -262,4 +263,18 @@ function calculateTier(
         if(Tier.isJobRelevant(info.title)) return 1
     }
     return hasRelevantLocation ? 2 : 3
+}
+
+function parseJobContent(content: string) {
+    const htmlParts: string[] = []
+    const parser = new htmlparser2.Parser({
+        ontext: (text) => {
+            htmlParts.push(text)
+        }
+    })
+    parser.write(content)
+    parser.end()
+    const html = htmlParts.join('')
+
+    return C.parseHtml(html)
 }

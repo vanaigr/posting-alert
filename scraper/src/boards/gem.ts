@@ -132,7 +132,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [id])
-            if(Tier.isJobDesired(jobInfo.title, jobInfo.descriptionHtml) && isLocationDesired(jobInfo)) {
+            if(Tier.isJobDesired(jobInfo.title, C.parseHtml(jobInfo.descriptionHtml)) && isLocationDesired(jobInfo)) {
                 log.I('Job ', id, ' is relevant!')
 
                 const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))

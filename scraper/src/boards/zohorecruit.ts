@@ -256,7 +256,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(Tier.isJobDesired(job.title, longInfo.description) && isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.title, C.parseHtml(longInfo.description)) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
