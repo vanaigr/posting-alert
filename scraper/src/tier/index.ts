@@ -58,7 +58,7 @@ const getYears = /(?<!\bfor )\b(\d+)(\s*[-–—]\s*\d+)?\s*\+? (yrs|years|exper
 export function getYearsOfExperience(description: string) {
     return Math.max(
         ...[...description.matchAll(getYears)]
-            .map(it => Number.parseInt(it[2], 10))
+            .map(it => Number.parseInt(it[1], 10))
             // filter out false-positives from companies writing "we've been doing X 123 years"
             .filter(it => it <= 10),
     )
