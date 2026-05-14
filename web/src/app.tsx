@@ -25,10 +25,12 @@ export type Check = {
     job: {
         fetchedEpochMs: number | null
         publishedEpochMs: number | null
-        locationRelevant: boolean
-        locationDesired: boolean
         jobRelevant: boolean
+        locationRelevant: boolean
         jobDesired: boolean
+        locationDesired: boolean
+        processedJobDesired: boolean
+        processedLocationDesired: boolean
     } | null
 }
 
@@ -293,10 +295,12 @@ function CheckResult({ data }: { data: Check }) {
                 : <ul className='text-xs space-y-0.5 text-slate-300'>
                     <li>Fetched: {job.fetchedEpochMs == null ? '—' : new Date(job.fetchedEpochMs).toLocaleString()}</li>
                     <li>Published: {job.publishedEpochMs == null ? '—' : new Date(job.publishedEpochMs).toLocaleString()}</li>
-                    <li>Location relevant: {String(job.locationRelevant)}</li>
-                    <li>Location desired: {String(job.locationDesired)}</li>
                     <li>Job relevant: {String(job.jobRelevant)}</li>
+                    <li>Location relevant: {String(job.locationRelevant)}</li>
                     <li>Job desired: {String(job.jobDesired)}</li>
+                    <li>Location desired: {String(job.locationDesired)}</li>
+                    <li>Processed job desired: {String(job.processedJobDesired)}</li>
+                    <li>Processed location desired: {String(job.processedLocationDesired)}</li>
                 </ul>
             }
         </div>

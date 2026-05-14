@@ -6,13 +6,6 @@ import * as D from 'drizzle-orm'
 import * as Db from './lib/db.ts'
 import * as T from './lib/temporal.ts'
 import * as C from './common.ts'
-import * as Tier from './tier/index.ts'
-import * as Ashbyhq from './boards/ashbyhq.ts'
-import * as Lever from './boards/lever.ts'
-import * as Greenhouse from './boards/greenhouse.ts'
-import * as Bamboohr from './boards/bamboohr.ts'
-import * as Zohorecruit from './boards/zohorecruit.ts'
-import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
 
 type CompanyParams = {
@@ -25,10 +18,12 @@ type CompanyParams = {
 type JobParams = {
     fetchedEpochMs: number | null
     publishedEpochMs: number | null
-    locationRelevant: boolean
-    locationDesired: boolean
-    jobRelevant: boolean
-    jobDesired: boolean
+    jobDesired: boolean | undefined
+    locationRelevant: boolean | undefined
+    jobRelevant: boolean | undefined
+    locationDesired: boolean | undefined
+    processedJobDesired: boolean | undefined
+    processedLocationDesired: boolean | undefined
 }
 
 export type PostingParams = { company: CompanyParams | undefined, job: JobParams | undefined }
@@ -59,18 +54,12 @@ export function ashbyhqGetPostingParams(db: BetterSQLite3Database, companyName: 
             const job = lookupJob(db, Db.aJob, companyName, jobId)
             if(!job) return
 
-            const shortInfo = JSON.parse(job.shortInfo)
-            const ashbyJob = shortInfo.job
             const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
-            const description: string | undefined = longInfo?.descriptionHtml ?? undefined
 
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: longInfo?.publishedDate ? new Date(longInfo.publishedDate).getTime() : null,
-                locationRelevant: Ashbyhq.isLocationRelevant(ashbyJob),
-                locationDesired: Ashbyhq.isLocationDesired(ashbyJob),
-                jobRelevant: Tier.isJobRelevant(ashbyJob.title),
-                jobDesired: Tier.isJobDesired(ashbyJob.title, description),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -88,10 +77,7 @@ export function leverGetPostingParams(db: BetterSQLite3Database, companyName: st
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: typeof info.createdAt === 'number' ? info.createdAt : null,
-                locationRelevant: Lever.isLocationRelevant(info),
-                locationDesired: Lever.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.text),
-                jobDesired: Tier.isJobDesired(info.text, info.descriptionPlain),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -108,10 +94,7 @@ export function greenhouseGetPostingParams(db: BetterSQLite3Database, companyNam
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: new Date(info.updated_at).getTime(),
-                locationRelevant: Greenhouse.isLocationRelevant(info),
-                locationDesired: Greenhouse.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.title),
-                jobDesired: Tier.isJobDesired(info.title, info.content),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -124,15 +107,10 @@ export function bamboohrGetPostingParams(db: BetterSQLite3Database, companyName:
             const job = lookupJob(db, Db.bamboohrJob, companyName, jobId)
             if(!job) return
 
-            const info = JSON.parse(job.info)
-            const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: null,
-                locationRelevant: Bamboohr.isLocationRelevant(info),
-                locationDesired: Bamboohr.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.jobOpeningName),
-                jobDesired: Tier.isJobDesired(info.jobOpeningName, longInfo?.description),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -145,15 +123,10 @@ export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyNa
             const job = lookupJob(db, Db.zohorecruitJob, companyName, jobId)
             if(!job) return
 
-            const info = JSON.parse(job.info)
-            const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: null,
-                locationRelevant: Zohorecruit.isLocationRelevant(info),
-                locationDesired: Zohorecruit.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.title),
-                jobDesired: Tier.isJobDesired(info.title, longInfo?.description),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -166,14 +139,10 @@ export function gemGetPostingParams(db: BetterSQLite3Database, companyName: stri
             const job = lookupJob(db, Db.gemJob, companyName, jobId)
             if(!job) return
 
-            const info: Gem.JobInfo = JSON.parse(job.info)
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: null,
-                locationRelevant: Gem.isLocationRelevant(info),
-                locationDesired: Gem.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.title),
-                jobDesired: Tier.isJobDesired(info.title, info.descriptionHtml),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -186,15 +155,11 @@ export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName:
             const job = lookupJob(db, Db.ripplingJob, companyName, jobId)
             if(!job) return
 
-            const info: Rippling.JobInfo = JSON.parse(job.info)
             const longInfo: Rippling.LongInfo | null = job.longInfo ? JSON.parse(job.longInfo) : null
             return {
                 fetchedEpochMs: job.fetchedEpochMs,
                 publishedEpochMs: longInfo?.createdOn ? new Date(longInfo.createdOn).getTime() : null,
-                locationRelevant: Rippling.isLocationRelevant(info),
-                locationDesired: Rippling.isLocationDesired(info),
-                jobRelevant: Tier.isJobRelevant(info.title),
-                jobDesired: Tier.isJobDesired(info.title, longInfo?.descriptionHtml),
+                ...unpackRelevancy(job.relevancy),
             }
         })(),
     }
@@ -272,5 +237,18 @@ if(import.meta.main) {
             .toZonedDateTimeISO(process.env.SEARCH_TIMEZONE!)
             .toPlainDateTime()
             .toLocaleString()
+    }
+}
+
+function unpackRelevancy(relevancy: string) {
+    const r = JSON.parse(relevancy)
+    return {
+    jobRelevant: r.jr,
+    locationRelevant: r.lr,
+    jobDesired: r.jd,
+    locationDesired: r.ld,
+    processedJobDesired: r.pjd,
+    processedLocationDesired: r.pld,
+
     }
 }
