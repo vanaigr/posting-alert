@@ -8,6 +8,7 @@
     },
     "dependencies": {
         "@hono/node-server": "^2.0.1",
+        "@openrouter/sdk": "^0.12.35",
         "better-sqlite3": "^12.9.0",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",

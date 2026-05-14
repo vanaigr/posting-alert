@@ -1,6 +1,7 @@
 import * as D from 'drizzle-orm'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as htmlparser2 from 'htmlparser2'
+import { OpenRouter } from '@openrouter/sdk'
 
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
@@ -130,7 +131,7 @@ export function evaluateTiers<C extends { name: string }, J extends { companyNam
     db: BetterSQLite3Database,
     Company: any,
     Job: any,
-    calculateTier: (company: C, jobs: J[]) => number,
+    calculateTier: (db: BetterSQLite3Database, company: C, jobs: J[]) => number,
 ) {
     const tierZero = db.select().from(Company).where(D.eq(Company.tier, 0)).all() as C[]
     if(tierZero.length === 0) return
@@ -150,7 +151,7 @@ export function evaluateTiers<C extends { name: string }, J extends { companyNam
     const tier2: string[] = []
     const tier3: string[] = []
     for(const company of tierZero) {
-        const tier = calculateTier(company, jobsByCompany.get(company.name) ?? [])
+        const tier = calculateTier(db, company, jobsByCompany.get(company.name) ?? [])
         if(tier === 1) tier1.push(company.name)
         else if(tier === 2) tier2.push(company.name)
         else tier3.push(company.name)
@@ -362,4 +363,84 @@ export function parseHtml(html: string) {
 
     return result
     */
+}
+
+export function isLocationInUs(db: BetterSQLite3Database, location: string) {
+    const isInUs = db.select().from(Db.locationClassification)
+        .where(D.eq(Db.locationClassification.location, location))
+        .get()
+        ?.isInUs
+    return isInUs === undefined || isInUs !== '0'
+}
+
+const currentlyClassifying = new Map<string, Promise<string>>()
+export async function isLocationInUsFull(parentLog: L.Log, db: BetterSQLite3Database, location: string) {
+    let isInUs = db.select().from(Db.locationClassification)
+        .where(D.eq(Db.locationClassification.location, location))
+        .get()
+        ?.isInUs
+
+    if(isInUs === undefined) {
+        let classifyTask = currentlyClassifying.get(location)
+        if(classifyTask === undefined) {
+            classifyTask = (async() => {
+                await Promise.resolve()
+
+                const log = parentLog.addedCtx('classify')
+                try {
+                    return await classifyLocationInner(log, db, location)
+                }
+                catch(err) {
+                    log.E([err])
+                    return '?'
+                }
+                finally {
+                    currentlyClassifying.delete(location)
+                }
+            })()
+            currentlyClassifying.set(location, classifyTask)
+        }
+        isInUs = await classifyTask
+    }
+
+    return isInUs !== '0'
+}
+
+async function classifyLocationInner(log: L.Log, db: BetterSQLite3Database, location: string) {
+    const openrouter = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY! })
+    const generation = await openrouter.chat.send({
+        chatRequest: {
+            model: 'openai/gpt-5.4-nano',
+            reasoning: {
+                effort: 'none',
+            },
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Below is a location requirement of a job. Does it include a location within continental United States? Reply with "0" if no, "1" if yes, and "?" if unknown or ambiguous.',
+                },
+                {
+                    role: 'user',
+                    content: location,
+                },
+            ],
+            stream: false,
+        }
+    })
+    log.I('Received generation', [[' ', [generation]], 'extra-details'])
+    const result = db.insert(Db.generationResponse)
+        .values({ input: JSON.stringify({ v: 1, t: 'classifyLocation', location }), generation: JSON.stringify(generation) })
+        .returning({ id: Db.generationResponse.id })
+        .get()
+    log.I('Inserted as ', [result.id])
+
+    const isInUs = ('' + generation.choices[0].message.content).trim()
+    if(isInUs === '0' || isInUs === '1' || isInUs === '?') {
+        db.insert(Db.locationClassification).values({ location, isInUs }).onConflictDoNothing().run()
+        return isInUs
+    }
+    else {
+        log.W('Invalid content')
+        return '?'
+    }
 }

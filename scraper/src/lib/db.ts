@@ -185,6 +185,17 @@ export const pendingNotification = sqliteTable('pending_notification', {
     originalEpochMs: integer('original_epoch_ms').notNull(),
 })
 
+export const locationClassification = sqliteTable('location_classification', {
+    location: text('location').primaryKey(),
+    isInUs: text('is_in_us').notNull(),
+})
+
+export const generationResponse = sqliteTable('generation_response', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    input: text('input').notNull(),
+    generation: text('generation').notNull(),
+})
+
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
@@ -566,6 +577,22 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`update gem_company set tier = 0`)
             tx.run(sql`update rippling_company set tier = 0`)
             tx.run(sql`PRAGMA user_version = 24`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 24) {
+            tx.run(sql`CREATE TABLE location_classification (
+                location TEXT PRIMARY KEY,
+                is_in_us TEXT NOT NULL
+            )`)
+            tx.run(sql`CREATE TABLE generation_response (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                input TEXT NOT NULL,
+                generation TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 25`)
         }
     })
 }

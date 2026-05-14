@@ -181,7 +181,7 @@ async function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? calculateTier(company, [...existingJobsRows, ...toInsert])
+        ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
         : null
 
     db.transaction(db => {
@@ -239,7 +239,7 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(Tier.isJobDesired(job.jobOpeningName, longInfo.description ? C.parseHtml(longInfo.description) : undefined) && isLocationDesired(job)) {
+        if(Tier.isJobDesired(job.jobOpeningName, C.parseHtml(longInfo.description)) && isLocationDesired(job)) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -345,6 +345,7 @@ type FetchJob = {
 }
 
 function calculateTier(
+    _db: BetterSQLite3Database,
     _company: D.InferSelectModel<typeof Company>,
     jobs: D.InferSelectModel<typeof Job>[],
 ): number {
@@ -359,7 +360,6 @@ function calculateTier(
     return hasRelevantLocation ? 2 : 3
 }
 
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
 export function isLocationRelevant(info: FetchJob) {
     const isInUs = info.atsLocation.country !== null
         && (
@@ -367,12 +367,10 @@ export function isLocationRelevant(info: FetchJob) {
                 || info.atsLocation.country === 'us'
                 || /(united states|america)/i.test(info.atsLocation.country)
         )
-    const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
-    const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
         && info.location.state === null && info.location.city === null
 
-    return isInUs || isRemoteInUs || isRemoteWorldwide
+    return isInUs || isRemoteWorldwide
 }
 
 export function isLocationDesired(info: FetchJob) {
@@ -385,11 +383,11 @@ export function isLocationDesired(info: FetchJob) {
                 || info.atsLocation.country === 'us'
                 || /(united states|america)/i.test(info.atsLocation.country)
         )
-    const isRemote = /(remote|nationwide)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
+    const isRemote = /(remote|nationwide|continental)/i.test(info.jobOpeningName) || info.isRemote || info.locationType === '1'
     const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
         && info.location.state === null && info.location.city === null
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
-    return isRemoteInUs || isRemoteWorldwide || isMyLocal
+    return isMyLocal || isRemoteInUs || isRemoteWorldwide
 }

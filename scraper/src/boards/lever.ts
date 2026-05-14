@@ -128,27 +128,29 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tier.isJobDesired(job.text, job.descriptionPlain) && isLocationDesired(job)) {
-                log.I('Job ', job.id, ' is relevant!')
+            promises.push((async() => {
+                if(Tier.isJobDesired(job.text, job.descriptionPlain) && await isLocationDesiredFull(log, db, job)) {
+                    log.I('Job ', job.id, ' is relevant!')
 
-                const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
-                const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
+                    const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
+                    const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))
 
-                promises.push(C.sendMessage(
-                    log.addedCtx('job ', [job.id]),
-                    db,
-                    job.text + ' @ ' + company.name + '\n'
-                        + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
-                        + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
-                ))
-            }
+                    await C.sendMessage(
+                        log.addedCtx('job ', [job.id]),
+                        db,
+                        job.text + ' @ ' + company.name + '\n'
+                            + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
+                            + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
+                    )
+                }
+            })())
         }
     }
 
     await Promise.allSettled(promises)
 
     const newTier = toInsert.length > 0
-        ? calculateTier(company, [...existingJobsRows, ...toInsert])
+        ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
         : null
 
     db.transaction(db => {
@@ -232,6 +234,7 @@ export type FetchJob = {
 }
 
 function calculateTier(
+    db: BetterSQLite3Database,
     _company: D.InferSelectModel<typeof Company>,
     jobs: D.InferSelectModel<typeof Job>[],
 ): number {
@@ -239,48 +242,84 @@ function calculateTier(
     for(const job of jobs) {
         const info: JobInfo | null = JSON.parse(job.info ?? 'null')
         if(!info) continue
-        if(!isLocationRelevant(info)) continue
+        if(!isLocationRelevant(db, info)) continue
         hasRelevantLocation = true
         if(Tier.isJobRelevant(info.text)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }
 
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
-export function isLocationRelevant(info: JobInfo) {
-    return getLocations(info).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-            || info.country === 'US' || info.country === null
-        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo) {
+    const location = getJobLocation(info)
 
-        return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
-    })
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+        || info.country === 'US'// || info.country === null
+    if(mentionsUs) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete) {
+        if(C.isLocationInUs(db, location)) return true
+    }
+
+    return false
+}
+/*
+export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
+    const location = getJobLocation(info)
+
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
+        || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain ?? '')
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+        || info.country === 'US'// || info.country === null
+    if(mentionsUs && isRemote) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete && isRemote) {
+        if(C.isLocationInUs(db, location)) return true
+    }
+
+    return false
+}
+*/
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo) {
+    const location = getJobLocation(info)
+
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
+        || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain ?? '')
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+        || info.country === 'US'// || info.country === null
+    if(mentionsUs && isRemote) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete && isRemote) {
+        if(await C.isLocationInUsFull(log, db, location)) return true
+    }
+
+    return false
 }
 
-// NOTE: assumes info.descriptionPlain exists
-export function isLocationDesired(info: JobInfo) {
-    return getLocations(info).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-            || info.country === 'US' || info.country === null
-        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-        const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
-            || (info.descriptionPlain && /remote/i.test(info.descriptionPlain))
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-        const isRemoteWorldwide = location.toLowerCase() === 'remote'
-        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-
-        return isRemoteInUs || isRemoteWorldwide || isMyLocal
-    })
-}
-
-function getLocations(info: JobInfo) {
+function getJobLocation(info: JobInfo) {
     return [
         ...(info.categories.location ? [info.categories.location] : []),
         ...(info.categories.allLocations ?? []),
-    ]
+    ].join(' | ')
 }
 
 type JobInfo = {

@@ -11,6 +11,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.1
         version: 2.0.1(hono@4.12.16)
+      '@openrouter/sdk':
+        specifier: ^0.12.35
+        version: 0.12.35
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
@@ -509,6 +512,9 @@ packages:
     peerDependencies:
       hono: ^4
 
+  '@openrouter/sdk@0.12.35':
+    resolution: {integrity: sha512-s4QVLLnG1AmfW3TjnnHUqGfsCkzwVK+kboGcZmKbde09m1DPqgzl4RUFt/HJ5v97MX8aEaN0UG3mKv2S+qj2Gw==}
+
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
@@ -836,6 +842,9 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
@@ -1075,6 +1084,10 @@ snapshots:
   '@hono/node-server@2.0.1(hono@4.12.16)':
     dependencies:
       hono: 4.12.16
+
+  '@openrouter/sdk@0.12.35':
+    dependencies:
+      zod: 4.4.3
 
   '@opentelemetry/api@1.9.1':
     optional: true
@@ -1390,3 +1403,5 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   wrappy@1.0.2: {}
+
+  zod@4.4.3: {}

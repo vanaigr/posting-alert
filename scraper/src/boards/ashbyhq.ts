@@ -147,7 +147,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     }
 }
 
-function checkCompany(
+async function checkCompany(
     db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
@@ -191,7 +191,7 @@ function checkCompany(
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tier.isJobDesired(job.title, undefined) && isLocationDesired(job)) {
+            if(Tier.isJobDesired(job.title, undefined) && isLocationDesired(db, job)) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     id: job.id,
@@ -204,7 +204,7 @@ function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? calculateTier(company, [...existingJobsRows, ...toInsert])
+        ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
         : null
 
     db.transaction(db => {
@@ -243,7 +243,10 @@ async function processJobDetail(
     }
     else {
         const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
-        if(Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined) && isLocationDesired(job)) {
+        if(
+            Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined)
+                && await isLocationDesiredFull(log, db, job)
+        ) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
@@ -261,7 +264,7 @@ async function processJobDetail(
             log,
             db,
             job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
-                + job.workplaceType + ': ' + getJobLocations(job).join(' | ') + '\n'
+                + job.workplaceType + ': ' + getJobLocation(job) + '\n'
                 + `Ashby ${tier} < ${maxAgo} ago: `
                 + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
         )
@@ -437,6 +440,7 @@ type ApiJobPosting = null | {
 }
 
 export function calculateTier(
+    db: BetterSQLite3Database,
     _company: D.InferSelectModel<typeof Company>,
     jobs: D.InferSelectModel<typeof Job>[],
 ): number {
@@ -444,40 +448,71 @@ export function calculateTier(
     for(const job of jobs) {
         const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
         if(!infoRaw) continue
-        if(!isLocationRelevant(infoRaw)) continue
+        if(!isLocationRelevant(db, infoRaw)) continue
         hasRelevantLocation = true
         if(Tier.isJobRelevant(infoRaw.title)) return 1
     }
     return hasRelevantLocation ? 2 : 3
 }
 
-export function getJobLocations(job: any) {
-    return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)]
+export function getJobLocation(job: any) {
+    return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)].join(' | ')
 }
-// Unfortunately ashbyhq does not give a way to get job description in 1 request with job list (and I don't want to half our throughput),
-// so we don't have the JD, and have to be more lenient.
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
-export function isLocationRelevant(job: any) {
-    return getJobLocations(job).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-        const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-        const isRemoteWorldwide = location.toLowerCase() === 'remote'
+export function isLocationRelevant(db: BetterSQLite3Database, job: any) {
+    const location = getJobLocation(job)
 
-        return mentionsUs || mentionsUsConcrete || isRemoteInUs || isRemoteWorldwide
-    })
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+    if(mentionsUs) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete) {
+        if(C.isLocationInUs(db, location)) return true
+    }
+
+    return false
 }
-export function isLocationDesired(job: any) {
-    return getJobLocations(job).some(location => {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-        const isRemote = /(remote|nationwide|continental)/i.test(location) || job.workplaceType === 'Remote'
-        const isRemoteInUs = isRemote && (mentionsUs || mentionsUsConcrete)
-        const isRemoteWorldwide = location.toLowerCase() === 'remote'
-        const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-        const onSite = !isRemote && (job.workplaceType === 'OnSite' || job.workplaceType === 'Hybrid')
+export function isLocationDesired(db: BetterSQLite3Database, job: any) {
+    const location = getJobLocation(job)
 
-        return isRemoteInUs || isRemoteWorldwide || isMyLocal || ((mentionsUs || mentionsUsConcrete) && !(mentionsUsConcrete && onSite))
-    })
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid')
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+    if(mentionsUs && isRemote) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete && isRemote) {
+        if(C.isLocationInUs(db, location)) return true
+    }
+
+    return false
+}
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: any) {
+    const location = getJobLocation(job)
+
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid')
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
+    if(mentionsUs && isRemote) return true
+
+    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
+    if(mentionsUsConcrete && isRemote) {
+        if(await C.isLocationInUsFull(log, db, location)) return true
+    }
+
+    return false
 }

@@ -155,7 +155,7 @@ async function checkCompany(
     await Promise.allSettled(promises)
 
     const newTier = toInsert.length > 0
-        ? calculateTier(company, [...existingJobsRows, ...toInsert])
+        ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
         : null
 
     db.transaction(db => {
@@ -230,6 +230,7 @@ export type JobInfo = {
 }
 
 function calculateTier(
+    _db: BetterSQLite3Database,
     _company: D.InferSelectModel<typeof Company>,
     jobs: D.InferSelectModel<typeof Job>[],
 ): number {
@@ -244,26 +245,23 @@ function calculateTier(
     return hasRelevantLocation ? 2 : 3
 }
 
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
 export function isLocationRelevant(info: JobInfo) {
     return info.locations.some(it => {
         const isInUs = it.isoCountry === 'USA'
-        const isRemote = /(remote|nationwide)/i.test(info.title) || it.isRemote
-        const isRemoteInUs = isRemote && isInUs
         const isRemoteWorldwide = /remote/i.test(it.name)
 
-        return isInUs || isRemoteInUs || isRemoteWorldwide
+        return isInUs || isRemoteWorldwide
     })
 }
 
 export function isLocationDesired(info: JobInfo) {
     return info.locations.some(it => {
         const isInUs = it.isoCountry === 'USA'
-        const isRemote = /(remote|nationwide)/i.test(info.title) || it.isRemote
+        const isRemote = /(remote|nationwide|continental)/i.test(info.title) || it.isRemote
         const isRemoteInUs = isRemote && isInUs
         const isRemoteWorldwide = /remote/i.test(it.name)
         const isMyLocal = /chicago/i.test(it.city) || /chicago/i.test(it.name)
 
-        return isRemoteInUs || isRemoteWorldwide || isMyLocal
+        return isMyLocal || isRemoteInUs || isRemoteWorldwide
     })
 }
