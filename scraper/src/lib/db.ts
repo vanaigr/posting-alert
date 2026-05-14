@@ -18,6 +18,7 @@ export const aJob = sqliteTable('ashbyhq_job', {
     shortInfo: text('short_info').notNull(),
     longInfo: text('long_info'),
     fetchedEpochMs: integer('fetched_epoch_ms'),
+    relevancy: text('relevancy').notNull(),
 })
 
 // TODO: delete
@@ -45,6 +46,7 @@ export const lJob = sqliteTable('lever_job', {
     companyName: text('company_name').notNull(),
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
     info: text('info').notNull(),
+    relevancy: text('relevancy').notNull(),
 })
 
 
@@ -60,6 +62,7 @@ export const gJob = sqliteTable('greenhouse_job_2', {
     companyName: text('company_name').notNull(),
     fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
     info: text('info').notNull(),
+    relevancy: text('relevancy').notNull(),
 })
 
 
@@ -79,6 +82,7 @@ export const bamboohrJob = sqliteTable(
         fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
         info: text('info').notNull(),
         longInfo: text('long_info'),
+        relevancy: text('relevancy').notNull(),
     },
     table => [
         primaryKey({ columns: [table.companyName, table.id] }),
@@ -111,6 +115,7 @@ export const zohorecruitJob = sqliteTable(
         fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
         info: text('info').notNull(),
         longInfo: text('long_info'),
+        relevancy: text('relevancy').notNull(),
     },
     table => [
         primaryKey({ columns: [table.companyName, table.id] }),
@@ -141,6 +146,7 @@ export const gemJob = sqliteTable(
         id: text('id').notNull(),
         fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
         info: text('info').notNull(),
+        relevancy: text('relevancy').notNull(),
     },
     table => [
         primaryKey({ columns: [table.companyName, table.id] }),
@@ -163,6 +169,7 @@ export const ripplingJob = sqliteTable(
         fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
         info: text('info').notNull(),
         longInfo: text('long_info'),
+        relevancy: text('relevancy').notNull(),
     },
     table => [
         primaryKey({ columns: [table.companyName, table.id] }),
@@ -593,6 +600,20 @@ PRAGMA mmap_size = 268435456;
                 generation TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 25`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 25) {
+            tx.run(sql`ALTER TABLE ashbyhq_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE lever_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE greenhouse_job_2 ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE zohorecruit_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE gem_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE rippling_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`PRAGMA user_version = 26`)
         }
     })
 }

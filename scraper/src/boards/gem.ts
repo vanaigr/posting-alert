@@ -123,16 +123,25 @@ async function checkCompany(
             locations: rawJob.locations,
         }
 
+        const jobDesired = Tier.isJobDesired(jobInfo.title, C.parseHtml(jobInfo.descriptionHtml))
+        const locationDesired = isLocationDesired(jobInfo)
+
         toInsert.push({
             companyName: company.name,
             id: id,
             fetchedEpochMs: currentTime,
             info: JSON.stringify(jobInfo),
+            relevancy: JSON.stringify({
+                jr: Tier.isJobRelevant(jobInfo.title),
+                lr: isLocationRelevant(jobInfo),
+                jd: jobDesired,
+                ld: locationDesired,
+            }),
         })
 
         if(!initial) {
             log.I('New job ', [id])
-            if(Tier.isJobDesired(jobInfo.title, C.parseHtml(jobInfo.descriptionHtml)) && isLocationDesired(jobInfo)) {
+            if(jobDesired && locationDesired) {
                 log.I('Job ', id, ' is relevant!')
 
                 const maxAgo = C.millisecToDurationString(Date.now() - (company.checkedEpochMs || 0))

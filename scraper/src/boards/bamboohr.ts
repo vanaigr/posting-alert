@@ -156,17 +156,26 @@ async function checkCompany(
     for(const job of result.data.result) {
         if(existingJobs.has(job.id)) continue
 
+        const jobDesired = Tier.isJobDesired(job.jobOpeningName, undefined)
+        const locationDesired = isLocationDesired(job)
+
         toInsert.push({
             companyName: company.name,
             id: job.id,
             fetchedEpochMs: currentTime,
             info: JSON.stringify(job satisfies FetchJob),
             longInfo: null,
+            relevancy: JSON.stringify({
+                jr: Tier.isJobRelevant(job.jobOpeningName),
+                lr: isLocationRelevant(job),
+                jd: jobDesired,
+                ld: locationDesired,
+            }),
         })
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tier.isJobDesired(job.jobOpeningName, undefined) && isLocationDesired(job)) {
+            if(jobDesired && locationDesired) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     uniqueId: U.getHash(company.name, job.id),
@@ -239,13 +248,26 @@ async function processJobDetail(
     }
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
-        if(Tier.isJobDesired(job.jobOpeningName, C.parseHtml(longInfo.description)) && isLocationDesired(job)) {
+        const jobDesired = Tier.isJobDesired(job.jobOpeningName, C.parseHtml(longInfo.description))
+        const locationDesired = isLocationDesired(job)
+        if(jobDesired && locationDesired) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
         else {
             log.I('Job is not relevant after detail check')
         }
+
+        db.update(Job)
+            .set({
+                relevancy: JSON.stringify({
+                    ...JSON.parse(dbJob.relevancy),
+                    pjd: jobDesired,
+                    pld: locationDesired,
+                }),
+            })
+            .where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id)))
+            .run()
     }
 
     if(shouldSend) {

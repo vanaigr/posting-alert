@@ -178,6 +178,9 @@ async function checkCompany(
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
+        const jobDesired = Tier.isJobDesired(job.title, undefined)
+        const locationDesired = isLocationDesired(db, job)
+
         toInsert.push({
             id: job.id,
             companyName: company.name,
@@ -187,11 +190,17 @@ async function checkCompany(
             }),
             longInfo: null,
             fetchedEpochMs: currentTime,
+            relevancy: JSON.stringify({
+                jr: Tier.isJobRelevant(job.title),
+                lr: isLocationRelevant(db, job),
+                jd: jobDesired,
+                ld: locationDesired,
+            }),
         })
 
         if(!initial) {
             log.I('New job ', [job.id])
-            if(Tier.isJobDesired(job.title, undefined) && isLocationDesired(db, job)) {
+            if(jobDesired && locationDesired) {
                 log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     id: job.id,
@@ -243,16 +252,27 @@ async function processJobDetail(
     }
     else {
         const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
-        if(
-            Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined)
-                && await isLocationDesiredFull(log, db, job)
-        ) {
+
+        const jobDesired = Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined)
+        const locationDesired = await isLocationDesiredFull(log, db, job)
+        if(jobDesired && locationDesired) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
         }
         else {
             log.I('Job is not relevant after detail check')
         }
+
+        db.update(Job)
+            .set({
+                relevancy: JSON.stringify({
+                    ...JSON.parse(fetchRow.ashbyhq_job.relevancy),
+                    pjd: jobDesired,
+                    pld: locationDesired,
+                }),
+            })
+            .where(D.eq(Job.id, fetchRow.ashbyhq_job.id))
+            .run()
     }
 
     if(shouldSend) {

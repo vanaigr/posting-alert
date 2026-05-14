@@ -106,9 +106,21 @@ async function checkCompany(
     const existingJobs = new Set(existingJobsRows.map(it => it.id))
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
+    const relevancyData: Record<string, unknown>[] = []
     const promises: Promise<void>[] = []
     for(const job of result.data) {
         if(existingJobs.has(job.id)) continue
+
+        const jobDesired = Tier.isJobDesired(job.text, job.descriptionPlain)
+        const locationDesired = isLocationDesired(db, job)
+
+        const relevancy: Record<string, unknown> = {
+            jr: Tier.isJobRelevant(job.text),
+            lr: isLocationRelevant(db, job),
+            jd: jobDesired,
+            ld: locationDesired,
+        }
+        const idx = toInsert.length
 
         toInsert.push({
             id: job.id,
@@ -124,12 +136,20 @@ async function checkCompany(
                 workplaceType: job.workplaceType,
                 descriptionPlain: job.descriptionPlain,
             } satisfies JobInfo),
+            relevancy: '',
         })
+        relevancyData.push(relevancy)
 
         if(!initial) {
             log.I('New job ', [job.id])
             promises.push((async() => {
-                if(Tier.isJobDesired(job.text, job.descriptionPlain) && await isLocationDesiredFull(log, db, job)) {
+                if(!(jobDesired && locationDesired)) return
+
+                const locationDesiredFull = await isLocationDesiredFull(log, db, job)
+                relevancyData[idx].pjd = jobDesired
+                relevancyData[idx].pld = locationDesiredFull
+
+                if(locationDesiredFull) {
                     log.I('Job ', job.id, ' is relevant!')
 
                     const ago = C.millisecToDurationString(Date.now() - (job.createdAt || 0))
@@ -148,6 +168,10 @@ async function checkCompany(
     }
 
     await Promise.allSettled(promises)
+
+    for(let i = 0; i < toInsert.length; i++) {
+        toInsert[i].relevancy = JSON.stringify(relevancyData[i])
+    }
 
     const newTier = toInsert.length > 0
         ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
@@ -266,7 +290,6 @@ export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo) {
 
     return false
 }
-/*
 export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
     const location = getJobLocation(info)
 
@@ -290,7 +313,6 @@ export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
 
     return false
 }
-*/
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo) {
     const location = getJobLocation(info)
 
