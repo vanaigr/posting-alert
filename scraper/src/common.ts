@@ -461,7 +461,11 @@ async function classifyLocationInner(log: L.Log, db: BetterSQLite3Database, loca
             messages: [
                 {
                     role: 'system',
-                    content: 'Below is a location requirement of a job. Does it include a location within continental United States? Reply with "0" if no, "1" if yes, and "?" if unknown or ambiguous.',
+                    content: [{
+                        type: 'text',
+                        text: 'Below is a location requirement of a job. Does it include a location within continental United States? Reply with "0" if no, "1" if yes, and "?" if unknown or ambiguous.',
+                        cacheControl: { type: 'ephemeral' },
+                    }],
                 },
                 {
                     role: 'user',
