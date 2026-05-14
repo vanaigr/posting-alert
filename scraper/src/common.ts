@@ -109,6 +109,20 @@ export async function runPendingNotificationService(db: BetterSQLite3Database, l
     }
 }
 
+export async function runLocationClassificationService(db: BetterSQLite3Database, log: L.Log) {
+    while(true) {
+        await U.delay(T.Now.instant().add({ seconds: 1 }))
+
+        const row = db.select().from(Db.locationClassification)
+            .where(D.eq(Db.locationClassification.isInUs, ''))
+            .limit(1)
+            .get()
+        if(!row) continue
+
+        await isLocationInUsFull(log, db, row.location)
+    }
+}
+
 export function millisecToDurationString(ms: number) {
     const sec = ms / 1000
 

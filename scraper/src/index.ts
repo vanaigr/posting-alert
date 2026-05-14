@@ -34,6 +34,7 @@ async function main() {
 
     await Promise.race([
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
+        C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
         Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
         Lever.run(db, mainLog.addedCtx('lever')),
         Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
