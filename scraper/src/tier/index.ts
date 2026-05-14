@@ -36,7 +36,7 @@ const titleRegex = /(engineer|developer|programmer)/i
 export function isJobRelevant(title: string) {
     return titleRegex.test(title)
         && !(
-            /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design|devops)( (reliability|field))? engineer/i.test(title)
+            /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design|devops|security|infrastructure)( (reliability|field))? engineer/i.test(title)
                 || /engineer in test/i.test(title)
                 || /SDET/.test(title)
         )
