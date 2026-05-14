@@ -1,6 +1,8 @@
-import 'dotenv/config'
+import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
+import * as L from '../lib/log.ts'
 import * as U from '../lib/util.ts'
+import * as C from '../common.ts'
 
 import cities from './cities.json' with { type: 'json' }
 import states from './states.json' with { type: 'json' }
@@ -20,6 +22,13 @@ export const citiesStatesRegex2 = new RegExp(
             ...cityCodes,
         ].map(U.regexEscape).join('|')
         + ')\\b',
+)
+
+const cityStateRegexPart = `([a-zÀ-ÿ .'\\-]+,\\s+(${[...states, ...stateCodes].map(U.regexEscape).join('|')}))`
+
+export const citiesStatesRegex3 = new RegExp(
+    `^(${cityStateRegexPart}|.+,\\s+${cityStateRegexPart},\\s+\\d+)$`,
+    'i'
 )
 
 // NOTE: if this is changed, add a migration that resets tiers for the companies.
@@ -64,5 +73,82 @@ export function getYearsOfExperience(description: string) {
     )
 }
 
+
+export function testMentionsUsConcrete(location: string) {
+    return location
+        .replaceAll(/\s*(;|\/|\|)\s*/g, ' | ')
+        .split(' | ')
+        .some(part => citiesStatesRegex3.test(part))
+}
+
 // Relevant location: in the US or remote worldwide
 // Desired location: in Illinois or (not (onsite or hybrid) and in the US) or remote worldwide
+
+type LocationExtras = Partial<{ remote: boolean, mentionsUs: boolean }>
+
+export function isLocationRelevant(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+    if(mentionsUs) return true
+
+    const mentionsUsConcrete = testMentionsUsConcrete(location)
+    if(mentionsUsConcrete) return true
+
+    const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
+    if(mayBeUs) {
+        if(C.isLocationInUs(db, location)) return true
+    }
+
+    return false
+}
+export function isLocationDesired(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    if(isRemote) {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+        if(mentionsUs) return true
+
+        const mentionsUsConcrete = testMentionsUsConcrete(location)
+        if(mentionsUsConcrete) return true
+
+        const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
+        if(mayBeUs) {
+            if(C.isLocationInUs(db, location)) return true
+        }
+    }
+
+    return false
+}
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
+    if(isMyLocal) return true
+
+    const isRemoteWorldwide = location.toLowerCase() === 'remote'
+    if(isRemoteWorldwide) return true
+
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    if(isRemote) {
+        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+        if(mentionsUs) return true
+
+        const mentionsUsConcrete = testMentionsUsConcrete(location)
+        if(mentionsUsConcrete) return true
+
+        const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
+        if(mayBeUs) {
+            if(await C.isLocationInUsFull(log, db, location)) return true
+        }
+    }
+
+    return false
+}

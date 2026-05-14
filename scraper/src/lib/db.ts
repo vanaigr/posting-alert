@@ -194,7 +194,7 @@ export const pendingNotification = sqliteTable('pending_notification', {
 
 export const locationClassification = sqliteTable('location_classification', {
     location: text('location').primaryKey(),
-    isInUs: text('is_in_us').notNull(),
+    isInUs: text('is_in_us').notNull(), // 0, 1, ?. Empty if not generated
 })
 
 export const generationResponse = sqliteTable('generation_response', {
@@ -616,6 +616,15 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`PRAGMA user_version = 26`)
         }
     })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 26) {
+            tx.run(sql`CREATE INDEX location_classification_is_in_us_empty ON location_classification(is_in_us) where is_in_us = ''`)
+            tx.run(sql`PRAGMA user_version = 27`)
+        }
+    })
+
 }
 
 

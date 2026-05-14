@@ -387,27 +387,6 @@ export function parseHtml(html: string) {
     const result = resultParts.join(' ')
 
     return result
-
-    /*
-    const resultParts: (string | typeof barrier)[] = []
-    const parser2 = new htmlparser2.Parser({
-        ontext: (text) => {
-            text = text.trim()
-            if(text) resultParts.push(text)
-        },
-        onopentag: () => {
-            if(resultParts.at(-1) !== barrier) resultParts.push(barrier)
-        },
-        onclosetag: () => {
-            if(resultParts.at(-1) !== barrier) resultParts.push(barrier)
-        },
-    })
-    parser2.write(html)
-    parser2.end()
-    const result = resultParts.map(it => it === barrier ? ' ' : it).join('')
-
-    return result
-    */
 }
 
 export function isLocationInUs(db: BetterSQLite3Database, location: string) {
@@ -415,7 +394,13 @@ export function isLocationInUs(db: BetterSQLite3Database, location: string) {
         .where(D.eq(Db.locationClassification.location, location))
         .get()
         ?.isInUs
-    return isInUs === undefined || isInUs !== '0'
+
+    if(isInUs === undefined) {
+        db.insert(Db.locationClassification).values({ location, isInUs: '' }).onConflictDoNothing().run()
+        return true
+    }
+
+    return isInUs !== '0'
 }
 
 const currentlyClassifying = new Map<string, Promise<string>>()
@@ -425,7 +410,7 @@ export async function isLocationInUsFull(parentLog: L.Log, db: BetterSQLite3Data
         .get()
         ?.isInUs
 
-    if(isInUs === undefined) {
+    if(isInUs === undefined || isInUs === '') {
         let classifyTask = currentlyClassifying.get(location)
         if(classifyTask === undefined) {
             classifyTask = (async() => {
@@ -479,13 +464,19 @@ async function classifyLocationInner(log: L.Log, db: BetterSQLite3Database, loca
         .get()
     log.I('Inserted as ', [result.id])
 
-    const isInUs = ('' + generation.choices[0].message.content).trim()
-    if(isInUs === '0' || isInUs === '1' || isInUs === '?') {
-        db.insert(Db.locationClassification).values({ location, isInUs }).onConflictDoNothing().run()
-        return isInUs
-    }
-    else {
+    let isInUs = ('' + generation.choices[0].message.content).trim()
+    if(!(isInUs === '0' || isInUs === '1' || isInUs === '?')) {
         log.W('Invalid content')
-        return '?'
+        isInUs = '?'
     }
+
+    db.insert(Db.locationClassification)
+        .values({ location, isInUs })
+        .onConflictDoUpdate({
+            target: Db.locationClassification.location,
+            set: { isInUs },
+        })
+        .run()
+
+    return isInUs
 }

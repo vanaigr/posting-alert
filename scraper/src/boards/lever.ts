@@ -269,67 +269,22 @@ function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof
 }
 
 export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo) {
-    const location = getJobLocation(info)
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        || info.country === 'US'// || info.country === null
-    if(mentionsUs) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete) {
-        if(C.isLocationInUs(db, location)) return true
-    }
-
-    return false
+    return Tier.isLocationRelevant(db, getJobLocation(info), {
+        mentionsUs: info.country === 'US',
+        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+    })
 }
 export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
-    const location = getJobLocation(info)
-
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
-        || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain ?? '')
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        || info.country === 'US'// || info.country === null
-    if(mentionsUs && isRemote) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete && isRemote) {
-        if(C.isLocationInUs(db, location)) return true
-    }
-
-    return false
+    return Tier.isLocationDesired(db, getJobLocation(info), {
+        mentionsUs: info.country === 'US',
+        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+    })
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo) {
-    const location = getJobLocation(info)
-
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || info.workplaceType === 'remote'
-        || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain ?? '')
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-        || info.country === 'US'// || info.country === null
-    if(mentionsUs && isRemote) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete && isRemote) {
-        if(await C.isLocationInUsFull(log, db, location)) return true
-    }
-
-    return false
+    return await Tier.isLocationDesiredFull(log, db, getJobLocation(info), {
+        mentionsUs: info.country === 'US',
+        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+    })
 }
 
 function getJobLocation(info: JobInfo) {

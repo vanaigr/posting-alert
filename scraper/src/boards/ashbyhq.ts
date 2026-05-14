@@ -474,60 +474,17 @@ export function getJobLocation(job: any) {
     return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)].join(' | ')
 }
 export function isLocationRelevant(db: BetterSQLite3Database, job: any) {
-    const location = getJobLocation(job)
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    if(mentionsUs) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete) {
-        if(C.isLocationInUs(db, location)) return true
-    }
-
-    return false
+    return Tier.isLocationRelevant(db, getJobLocation(job), {
+        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+    })
 }
 export function isLocationDesired(db: BetterSQLite3Database, job: any) {
-    const location = getJobLocation(job)
-
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid')
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    if(mentionsUs && isRemote) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete && isRemote) {
-        if(C.isLocationInUs(db, location)) return true
-    }
-
-    return false
+    return Tier.isLocationDesired(db, getJobLocation(job), {
+        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+    })
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: any) {
-    const location = getJobLocation(job)
-
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
-
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid')
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location)
-    if(mentionsUs && isRemote) return true
-
-    const mentionsUsConcrete = Tier.citiesStatesRegex1.test(location) || Tier.citiesStatesRegex2.test(location)
-    if(mentionsUsConcrete && isRemote) {
-        if(await C.isLocationInUsFull(log, db, location)) return true
-    }
-
-    return false
+    return await Tier.isLocationDesiredFull(log, db, getJobLocation(job), {
+        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+    })
 }
