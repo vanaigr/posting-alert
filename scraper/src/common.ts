@@ -126,44 +126,65 @@ export const bannedCompanies = [
     'g2i',
 ]
 
-export function evaluateTiers<C extends { name: string }, J extends { companyName: string }>(
+export function initTierEvaluation<C extends { name: string }, J extends { companyName: string }>(
     log: L.Log,
     db: BetterSQLite3Database,
     Company: any,
     Job: any,
     calculateTier: (db: BetterSQLite3Database, company: C, jobs: J[]) => number,
 ) {
-    const tierZero = db.select().from(Company).where(D.eq(Company.tier, 0)).all() as C[]
-    if(tierZero.length === 0) return
+    const evaluateTiers = () => {
+        const companies = db.select().from(Company).all() as C[]
+        if(companies.length === 0) return
 
-    log.I('Recalculating tier for ', [tierZero.length], ' companies')
+        log.I('Recalculating tier for ', [companies.length], ' companies')
 
-    const jobsByCompany = new Map<string, J[]>()
-    // NOTE: this function is intended to be invoked when tier'ing changes and all companies
-    // need to be reevaluated, so querying everything is fine.
-    for(const job of db.select().from(Job).all() as J[]) {
-        const arr = jobsByCompany.get(job.companyName) ?? []
-        arr.push(job)
-        jobsByCompany.set(job.companyName, arr)
+        const jobsByCompany = new Map<string, J[]>()
+        // NOTE: this function is intended to be invoked when tier'ing changes and all companies
+        // need to be reevaluated, so querying everything is fine.
+        for(const job of db.select().from(Job).all() as J[]) {
+            const arr = jobsByCompany.get(job.companyName) ?? []
+            arr.push(job)
+            jobsByCompany.set(job.companyName, arr)
+        }
+
+        const tier1: string[] = []
+        const tier2: string[] = []
+        const tier3: string[] = []
+        for(const company of companies) {
+            const tier = calculateTier(db, company, jobsByCompany.get(company.name) ?? [])
+            if(tier === 1) tier1.push(company.name)
+            else if(tier === 2) tier2.push(company.name)
+            else tier3.push(company.name)
+        }
+
+        db.transaction(tx => {
+            if(tier1.length > 0) tx.update(Company).set({ tier: 1 }).where(D.inArray(Company.name, tier1)).run()
+            if(tier2.length > 0) tx.update(Company).set({ tier: 2 }).where(D.inArray(Company.name, tier2)).run()
+            if(tier3.length > 0) tx.update(Company).set({ tier: 3 }).where(D.inArray(Company.name, tier3)).run()
+        })
+
+        log.I([tier1.length], ', ', [tier2.length], ', ', [tier3.length])
+
+        const now = T.Now.instant()
+        const nowZdt = now.toZonedDateTimeISO(process.env.SEARCH_TIMEZONE!)
+        let nextCheckZdt = nowZdt
+            .with(
+                { hour: 2, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 },
+                { disambiguation: 'earlier' },
+            )
+            .add({ hours: 1 })
+        if(T.ZonedDateTime.compare(nextCheckZdt, nowZdt) <= 0) nextCheckZdt = nextCheckZdt.add({ days: 1 })
+
+        // Schedule reevaluation since LLM might've classified some locations and
+        // jobs that were relevant before are now not relevant.
+        setTimeout(
+            () => evaluateTiers(),
+            nextCheckZdt.toInstant().since(now).total('milliseconds'),
+        )
     }
 
-    const tier1: string[] = []
-    const tier2: string[] = []
-    const tier3: string[] = []
-    for(const company of tierZero) {
-        const tier = calculateTier(db, company, jobsByCompany.get(company.name) ?? [])
-        if(tier === 1) tier1.push(company.name)
-        else if(tier === 2) tier2.push(company.name)
-        else tier3.push(company.name)
-    }
-
-    db.transaction(tx => {
-        if(tier1.length > 0) tx.update(Company).set({ tier: 1 }).where(D.inArray(Company.name, tier1)).run()
-        if(tier2.length > 0) tx.update(Company).set({ tier: 2 }).where(D.inArray(Company.name, tier2)).run()
-        if(tier3.length > 0) tx.update(Company).set({ tier: 3 }).where(D.inArray(Company.name, tier3)).run()
-    })
-
-    log.I([tier1.length], ', ', [tier2.length], ', ', [tier3.length])
+    evaluateTiers()
 }
 
 export function getOvernightInfo() {

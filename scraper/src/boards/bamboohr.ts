@@ -20,7 +20,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
             failCount: 0,
         })
     })
-    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
+    C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()

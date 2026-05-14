@@ -15,7 +15,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
     await import('../sources/gem/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
-    C.evaluateTiers(mainLog, db, Company, Job, calculateTier)
+    C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false
