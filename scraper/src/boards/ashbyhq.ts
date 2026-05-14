@@ -213,7 +213,7 @@ async function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? calculateTier(db, company, [...existingJobsRows, ...toInsert])
+        ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 
     db.transaction(db => {
@@ -459,20 +459,15 @@ type ApiJobPosting = null | {
     compensationTierSummary: string | null
 }
 
-export function calculateTier(
-    db: BetterSQLite3Database,
-    _company: D.InferSelectModel<typeof Company>,
-    jobs: D.InferSelectModel<typeof Job>[],
-): number {
-    let hasRelevantLocation = false
-    for(const job of jobs) {
-        const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
-        if(!infoRaw) continue
-        if(!isLocationRelevant(db, infoRaw)) continue
-        hasRelevantLocation = true
-        if(Tier.isJobRelevant(infoRaw.title)) return 1
+export function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
+    const infoRaw = JSON.parse(job.shortInfo ?? '{}')?.job
+    if(infoRaw) {
+        if(isLocationRelevant(db, infoRaw)) {
+            if(Tier.isJobRelevant(infoRaw.title)) return 1
+            return 2
+        }
     }
-    return hasRelevantLocation ? 2 : 3
+    return 3
 }
 
 export function getJobLocation(job: any) {
