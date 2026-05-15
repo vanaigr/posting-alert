@@ -508,7 +508,7 @@ function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
         }
         if(!parsed || parsed['@type'] !== 'JobPosting') continue
 
-        if(parsed.applicantLocationRequirements['@type'] !== 'Country') {
+        if(parsed.applicantLocationRequirements?.['@type'] !== 'Country') {
             log.I('Searchme123 ', [parsed.applicantLocationRequirements])
         }
 
