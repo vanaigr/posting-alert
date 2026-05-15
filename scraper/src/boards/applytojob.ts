@@ -169,7 +169,7 @@ async function checkCompany(
         }
 
         const jobDesired = Tier.isJobDesired(jobInfo.title, undefined)
-        const locationDesired = isLocationDesired(db, jobInfo)
+        const locationDesired = isLocationDesired(db, { info: jobInfo, longInfo: null })
 
         toInsert.push({
             companyName: company.name,
@@ -179,7 +179,7 @@ async function checkCompany(
             longInfo: null,
             relevancy: JSON.stringify({
                 jr: Tier.isJobRelevant(jobInfo.title),
-                lr: isLocationRelevant(db, jobInfo),
+                lr: isLocationRelevant(db, { info: jobInfo, longInfo: null }),
                 jd: jobDesired,
                 ld: locationDesired,
             }),
@@ -239,7 +239,7 @@ async function processJobDetail(
 
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
-        const responseResult = await request(log, dispatcher, `https://${dbJob.companyName}.applytojob.com${dbJob.id}`)
+        const responseResult = await request(log, dispatcher, dbJob.id.startsWith('/') ? `https://${dbJob.companyName}.applytojob.com${dbJob.id}` : dbJob.id)
         if(responseResult.status === 'ok') {
             const posting = extractJobPosting(log, responseResult.data)
             if(posting) {
@@ -265,7 +265,7 @@ async function processJobDetail(
     else {
         const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
         const jobDesired = Tier.isJobDesired(job.title, C.parseHtml(longInfo.description))
-        const locationDesired = await isLocationDesiredFull(log, db, job, longInfo)
+        const locationDesired = await isLocationDesiredFull(log, db, { info: job, longInfo })
         if(jobDesired && locationDesired) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
@@ -312,7 +312,7 @@ export type JobInfo = {
 export type LongInfo = {
     description: string // html
     url: string | null
-    locationRequirements: string | null
+    locationRequirements: { '@type': string, name: string } | null
 }
 
 async function request(log: L.Log, connection: Dispatcher | undefined, url: string) {
@@ -344,30 +344,41 @@ async function request(log: L.Log, connection: Dispatcher | undefined, url: stri
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const info: JobInfo | null = JSON.parse(job.info ?? 'null')
-    if(info) {
-        if(isLocationRelevant(db, info)) {
-            if(Tier.isJobRelevant(info.title)) return 1
-            return 2
-        }
+    const info: JobInfo = JSON.parse(job.info)
+    const longInfo: LongInfo | null = JSON.parse(job.longInfo ?? 'null')
+    if(isLocationRelevant(db, { info, longInfo })) {
+        if(Tier.isJobRelevant(info.title)) return 1
+        return 2
     }
     return 3
 }
 
-function locationString(info: JobInfo, longInfo?: LongInfo | null) {
-    const parts = [info.location]
-    if(longInfo?.locationRequirements) parts.push(longInfo.locationRequirements)
-    return parts.filter(it => it).join(' | ')
+function mustBeOutsideUs(longInfo?: LongInfo | null) {
+    if(
+        longInfo?.locationRequirements
+            && longInfo.locationRequirements['@type'] === 'Country'
+    ) {
+        return longInfo.locationRequirements.name !== 'US'
+    }
 }
 
-export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo, longInfo?: LongInfo | null) {
-    return Tier.isLocationRelevant(db, locationString(info, longInfo))
+export function isLocationRelevant(db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
+    if(mustBeOutsideUs(job.longInfo)) return false
+    return Tier.isLocationRelevant(db, job.info.location, {
+        remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
+    })
 }
-export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo, longInfo?: LongInfo | null) {
-    return Tier.isLocationDesired(db, locationString(info, longInfo))
+export function isLocationDesired(db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
+    if(mustBeOutsideUs(job.longInfo)) return false
+    return Tier.isLocationDesired(db, job.info.location, {
+        remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
+    })
 }
-export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo, longInfo?: LongInfo | null) {
-    return await Tier.isLocationDesiredFull(log, db, locationString(info, longInfo))
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
+    if(mustBeOutsideUs(job.longInfo)) return false
+    return await Tier.isLocationDesiredFull(log, db, job.info.location, {
+        remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
+    })
 }
 
 type RawJob = { id: string, title: string, location: string }
@@ -445,7 +456,7 @@ function extractJobs(html: string) {
     return jobs
 }
 
-function extractJobPosting(log: L.Log, html: string): { description: string, url: string | null, locationRequirements: string | null } | undefined {
+function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
     const scripts: string[] = []
     let capturing = false
     let parts: string[] = []
@@ -481,25 +492,17 @@ function extractJobPosting(log: L.Log, html: string): { description: string, url
         }
         if(!parsed || parsed['@type'] !== 'JobPosting') continue
 
+        if(parsed.applicantLocationRequirements['@type'] !== 'Country') {
+            log.I('Searchme123 ', [parsed.applicantLocationRequirements])
+        }
+
         return {
             description: typeof parsed.description === 'string' ? parsed.description : '',
             url: typeof parsed.url === 'string' ? parsed.url : null,
-            locationRequirements: stringifyLocationRequirements(parsed.applicantLocationRequirements),
+            locationRequirements: parsed.applicantLocationRequirements,
         }
     }
 
     log.I('Did not find JobPosting ld+json', [[' ', [html]], 'extra-details'])
     return
-}
-
-function stringifyLocationRequirements(req: unknown): string | null {
-    if(!req) return null
-    const items = Array.isArray(req) ? req : [req]
-    const parts: string[] = []
-    for(const it of items) {
-        if(it && typeof it === 'object' && typeof (it as any).name === 'string') {
-            parts.push((it as any).name)
-        }
-    }
-    return parts.length > 0 ? parts.join(' | ') : null
 }
