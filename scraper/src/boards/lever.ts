@@ -269,19 +269,19 @@ function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof
 export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo) {
     return Tier.isLocationRelevant(db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
-        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+        remote: isRemote(info),
     })
 }
 export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
     return Tier.isLocationDesired(db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
-        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+        remote: isRemote(info),
     })
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo) {
     return await Tier.isLocationDesiredFull(log, db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
-        remote: !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain) || info.workplaceType === 'remote',
+        remote: isRemote(info),
     })
 }
 
@@ -290,6 +290,12 @@ function getJobLocation(info: JobInfo) {
         ...(info.categories.location ? [info.categories.location] : []),
         ...(info.categories.allLocations ?? []),
     ].join(' | ')
+}
+function isRemote(info: JobInfo) {
+    if(info.workplaceType === 'remote') return true
+    if(info.workplaceType !== 'onsite' && info.workplaceType !== 'hybrid') {
+        return !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain)
+    }
 }
 
 type JobInfo = {
