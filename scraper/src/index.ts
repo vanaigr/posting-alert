@@ -14,6 +14,7 @@ import * as Zohorecruit from './boards/zohorecruit.ts'
 import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
 import * as Applytojob from './boards/applytojob.ts'
+import * as Smartrecruiters from './boards/smartrecruiters.ts'
 
 let mainLog: L.Log | undefined
 
@@ -38,6 +39,7 @@ async function main() {
     await Promise.race([
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
         C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
+        // TODO: it should pass the samplers and not saver. Claude...
         Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), sampleSaver),
         Lever.run(db, mainLog.addedCtx('lever'), sampleSaver),
         Greenhouse.run(db, mainLog.addedCtx('greenhouse'), sampleSaver),
@@ -46,6 +48,7 @@ async function main() {
         Gem.run(db, mainLog.addedCtx('gem'), sampleSaver),
         Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
         Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
+        Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

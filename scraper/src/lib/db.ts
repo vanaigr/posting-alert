@@ -219,6 +219,20 @@ export const applytojobFetchJobDetails = sqliteTable('applytojob_fetch_job_detai
 })
 
 
+export const smartrecruitersJob = sqliteTable('smartrecruiters_job', {
+    id: text('id').primaryKey(),
+    fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+    info: text('info').notNull(),
+    longInfo: text('long_info'),
+    relevancy: text('relevancy').notNull(),
+})
+
+export const smartrecruitersFetchJobDetails = sqliteTable('smartrecruiters_fetch_job_details', {
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+})
+
+
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     message: text('message').notNull(),
@@ -690,6 +704,23 @@ PRAGMA mmap_size = 268435456;
         }
     })
 
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 28) {
+            tx.run(sql`CREATE TABLE smartrecruiters_job (
+                id TEXT PRIMARY KEY,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                long_info TEXT,
+                relevancy TEXT NOT NULL DEFAULT '{}'
+            )`)
+            tx.run(sql`CREATE TABLE smartrecruiters_fetch_job_details (
+                id TEXT PRIMARY KEY,
+                added_at INTEGER NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 29`)
+        }
+    })
 }
 
 
