@@ -4,7 +4,7 @@ import path from 'node:path'
 const args = process.argv.slice(2)
 const baseDir = path.resolve(args[0])
 const url = args[1]
-const matchType = args[2]
+const matchType = args[2] // e.g. domain, or nothing
 
 const OUTPUT = path.join(baseDir, 'archive-urls.txt')
 const STATE = path.join( baseDir, 'archive-urls.state.json')
