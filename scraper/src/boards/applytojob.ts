@@ -388,6 +388,7 @@ type RawJob = { id: string, title: string, location: string }
 function extractJobs(html: string) {
     const jobs: RawJob[] = []
 
+    let inColumnDepth = 0
     let currentHref: string | null = null
     let currentTitleParts: string[] = []
     let inJobTitleLink = false
@@ -402,17 +403,23 @@ function extractJobs(html: string) {
 
     const parser = new htmlparser2.Parser({
         onopentag(name, attribs) {
-            if(name === 'a' && /(^|\s)job_title_link(\s|$)/.test(attribs.class ?? '')) {
-                inJobTitleLink = true
-                currentHref = attribs.href ?? null
-                currentTitleParts = []
+            if(attribs.id === "jobs_column") {
+                inColumnDepth++
             }
-            else if(name === 'span' && /(^|\s)resumator_description(\s|$)/.test(attribs.class ?? '')) {
-                inDescription = true
-                descriptionParts = []
-            }
-            else if(name === 'strong' && inDescription) {
-                inStrong = true
+            else if(inColumnDepth > 0) {
+                inColumnDepth++
+                if(name === 'a' && /(^|\s)job_title_link(\s|$)/.test(attribs.class ?? '')) {
+                    inJobTitleLink = true
+                    currentHref = attribs.href ?? null
+                    currentTitleParts = []
+                }
+                else if(name === 'span' && /(^|\s)resumator_description(\s|$)/.test(attribs.class ?? '')) {
+                    inDescription = true
+                    descriptionParts = []
+                }
+                else if(name === 'strong' && inDescription) {
+                    inStrong = true
+                }
             }
         },
         ontext(text) {
@@ -424,22 +431,25 @@ function extractJobs(html: string) {
             }
         },
         onclosetag(name) {
-            if(name === 'a' && inJobTitleLink) {
-                inJobTitleLink = false
-                if(currentHref) {
-                    pendingAnchors.push({
-                        href: currentHref,
-                        title: currentTitleParts.join('').trim(),
-                    })
+            if(inColumnDepth > 0) {
+                inColumnDepth--
+                if(name === 'a' && inJobTitleLink) {
+                    inJobTitleLink = false
+                    if(currentHref) {
+                        pendingAnchors.push({
+                            href: currentHref,
+                            title: currentTitleParts.join('').trim(),
+                        })
+                    }
+                    currentHref = null
                 }
-                currentHref = null
-            }
-            else if(name === 'strong' && inStrong) {
-                inStrong = false
-            }
-            else if(name === 'span' && inDescription) {
-                inDescription = false
-                pendingLocations.push(descriptionParts.join('').trim())
+                else if(name === 'strong' && inStrong) {
+                    inStrong = false
+                }
+                else if(name === 'span' && inDescription) {
+                    inDescription = false
+                    pendingLocations.push(descriptionParts.join('').trim())
+                }
             }
         },
     })
