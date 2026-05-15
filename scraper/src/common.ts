@@ -127,8 +127,12 @@ export async function runLocationClassificationService(db: BetterSQLite3Database
 }
 
 export class Sampler {
-    count = 0
-    constructor(public name: string) {}
+    count: number
+    name: string
+    constructor(name: string) {
+        this.count = 0
+        this.name = name
+    }
 }
 
 export class SampleSaver {
