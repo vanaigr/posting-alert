@@ -258,12 +258,10 @@ export type FetchJob = {
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const info: JobInfo | null = JSON.parse(job.info ?? 'null')
-    if(info) {
-        if(isLocationRelevant(db, info)) {
-            if(Tier.isJobRelevant(info.text)) return 1
-            return 2
-        }
+    const info: JobInfo = JSON.parse(job.info)
+    if(isLocationRelevant(db, info)) {
+        if(Tier.isJobRelevant(info.text)) return 1
+        return 2
     }
     return 3
 }

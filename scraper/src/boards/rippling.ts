@@ -159,7 +159,7 @@ async function checkCompany(
         jobInfo.locations = [...new Set(jobInfo.locations)]
 
         const jobDesired = Tier.isJobDesired(jobInfo.title, undefined)
-        const locationDesired = isLocationDesired(db, jobInfo)
+        const locationDesired = isLocationDesired(db, { info: jobInfo, longInfo: null })
 
         toInsert.push({
             companyName: company.name,
@@ -169,7 +169,7 @@ async function checkCompany(
             longInfo: null,
             relevancy: JSON.stringify({
                 jr: Tier.isJobRelevant(jobInfo.title),
-                lr: isLocationRelevant(db, jobInfo),
+                lr: isLocationRelevant(db, { info: jobInfo, longInfo: null }),
                 jd: jobDesired,
                 ld: locationDesired,
             }),
@@ -177,7 +177,7 @@ async function checkCompany(
 
         if(!initial) {
             log.I('New job ', [id])
-            if(jobDesired && await isLocationDesiredFull(log, db, jobInfo)) {
+            if(jobDesired && await isLocationDesiredFull(log, db, { info: jobInfo, longInfo: null })) {
                 log.I('Job ', id, ' is initially relevant, queuing for detail fetch')
                 toEnqueueDetails.push({
                     uniqueId: U.getHash(company.name, id),
@@ -258,7 +258,7 @@ async function processJobDetail(
     }
     else {
         const jobDesired = Tier.isJobDesired(jobInfo.title, C.parseHtml(longInfo.descriptionHtml))
-        const locationDesired = isLocationDesired(db, jobInfo)
+        const locationDesired = isLocationDesired(db, { info: jobInfo, longInfo })
         if(jobDesired && locationDesired) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
@@ -356,22 +356,29 @@ export type LongInfo = {
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const info: JobInfo | null = JSON.parse(job.info ?? 'null')
-    if(info) {
-        if(isLocationRelevant(db, info)) {
-            if(Tier.isJobRelevant(info.title)) return 1
-            return 2
-        }
+    const info: JobInfo = JSON.parse(job.info)
+    const longInfo: LongInfo | null = JSON.parse(job.longInfo ?? 'null')
+
+    if(isLocationRelevant(db, { info, longInfo })) {
+        if(Tier.isJobRelevant(info.title)) return 1
+        return 2
     }
+
     return 3
 }
 
-export function isLocationRelevant(db: BetterSQLite3Database, jobInfo: JobInfo) {
-    return Tier.isLocationRelevant(db, jobInfo.locations.join(' | '))
+export function isLocationRelevant(db: BetterSQLite3Database, job: { info: JobInfo, longInfo: LongInfo | null }) {
+    return Tier.isLocationRelevant(db, job.info.locations.join(' | '), {
+        remote: !job.longInfo?.descriptionHtml || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.descriptionHtml),
+    })
 }
-export function isLocationDesired(db: BetterSQLite3Database, jobInfo: JobInfo) {
-    return Tier.isLocationDesired(db, jobInfo.locations.join(' | '))
+export function isLocationDesired(db: BetterSQLite3Database, job: { info: JobInfo, longInfo: LongInfo | null }) {
+    return Tier.isLocationDesired(db, job.info.locations.join(' | '), {
+        remote: !job.longInfo?.descriptionHtml || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.descriptionHtml),
+    })
 }
-export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, jobInfo: JobInfo) {
-    return await Tier.isLocationDesiredFull(log, db, jobInfo.locations.join(' | '))
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: { info: JobInfo, longInfo: LongInfo | null }) {
+    return await Tier.isLocationDesiredFull(log, db, job.info.locations.join(' | '), {
+        remote: !job.longInfo?.descriptionHtml || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.descriptionHtml),
+    })
 }
