@@ -1,8 +1,7 @@
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-
 import * as L from '../lib/log.ts'
 import * as U from '../lib/util.ts'
 import * as C from '../common.ts'
+import * as Db from '../lib/db.ts'
 
 import cities from './cities.json' with { type: 'json' }
 import states from './states.json' with { type: 'json' }
@@ -85,7 +84,7 @@ export function testMentionsUsConcrete(location: string) {
 
 type LocationExtras = Partial<{ remote: boolean, mentionsUs: boolean }>
 
-export function isLocationRelevant(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+export async function isLocationRelevant(db: Db.Database, location: string, extras: LocationExtras = {}) {
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
     if(isMyLocal) return true
 
@@ -100,12 +99,12 @@ export function isLocationRelevant(db: BetterSQLite3Database, location: string, 
 
     const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
     if(mayBeUs) {
-        if(C.isLocationInUs(db, location)) return true
+        if(await C.isLocationInUs(db, location)) return true
     }
 
     return false
 }
-export function isLocationDesired(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+export async function isLocationDesired(db: Db.Database, location: string, extras: LocationExtras = {}) {
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
     if(isMyLocal) return true
 
@@ -122,13 +121,13 @@ export function isLocationDesired(db: BetterSQLite3Database, location: string, e
 
         const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         if(mayBeUs) {
-            if(C.isLocationInUs(db, location)) return true
+            if(await C.isLocationInUs(db, location)) return true
         }
     }
 
     return false
 }
-export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
+export async function isLocationDesiredFull(log: L.Log, db: Db.Database, location: string, extras: LocationExtras = {}) {
     const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
     if(isMyLocal) return true
 

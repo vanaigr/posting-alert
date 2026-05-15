@@ -1,6 +1,6 @@
 import 'dotenv/config'
-import Database from 'better-sqlite3'
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
 import * as D from 'drizzle-orm'
 
 import * as Db from './lib/db.ts'
@@ -38,20 +38,20 @@ function calculateCompanyParams(company: C.AnyComany | undefined): CompanyParams
         failCount: 'failCount' in company ? company.failCount : undefined,
     }
 }
-function lookupCompany(db: BetterSQLite3Database, table: C.AnyCompanyTable, companyName: string) {
+function lookupCompany(db: Db.Database, table: C.AnyCompanyTable, companyName: string) {
     return db.select().from(table).where(D.eq(table.name, companyName)).get()
 }
-function lookupJob<T extends C.AnyJobTable>(db: BetterSQLite3Database, table: T, companyName: string, jobId: string) {
+function lookupJob<T extends C.AnyJobTable>(db: Db.Database, table: T, companyName: string, jobId: string) {
     return db.select().from(table)
         .where(D.and(D.eq(table.companyName, companyName), D.eq(table.id, jobId)))
         .get()
 }
 
-export function ashbyhqGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function ashbyhqGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.aCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.aJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.aCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.aJob, companyName, jobId)
             if(!job) return
 
             const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
@@ -65,11 +65,11 @@ export function ashbyhqGetPostingParams(db: BetterSQLite3Database, companyName: 
     }
 }
 
-export function leverGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function leverGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.lCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.lJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.lCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.lJob, companyName, jobId)
             if(!job) return
 
             const info = JSON.parse(job.info)
@@ -83,11 +83,11 @@ export function leverGetPostingParams(db: BetterSQLite3Database, companyName: st
     }
 }
 
-export function greenhouseGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function greenhouseGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.gCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.gJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.gCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.gJob, companyName, jobId)
             if(!job) return
 
             const info = JSON.parse(job.info)
@@ -100,11 +100,11 @@ export function greenhouseGetPostingParams(db: BetterSQLite3Database, companyNam
     }
 }
 
-export function bamboohrGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function bamboohrGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.bamboohrCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.bamboohrJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.bamboohrCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.bamboohrJob, companyName, jobId)
             if(!job) return
 
             return {
@@ -116,11 +116,11 @@ export function bamboohrGetPostingParams(db: BetterSQLite3Database, companyName:
     }
 }
 
-export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function zohorecruitGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.zohorecruitCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.zohorecruitJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.zohorecruitCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.zohorecruitJob, companyName, jobId)
             if(!job) return
 
             return {
@@ -132,11 +132,11 @@ export function zohorecruitGetPostingParams(db: BetterSQLite3Database, companyNa
     }
 }
 
-export function gemGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function gemGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.gemCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.gemJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.gemCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.gemJob, companyName, jobId)
             if(!job) return
 
             return {
@@ -148,11 +148,11 @@ export function gemGetPostingParams(db: BetterSQLite3Database, companyName: stri
     }
 }
 
-export function applytojobGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function applytojobGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.applytojobCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.applytojobJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.applytojobCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.applytojobJob, companyName, jobId)
             if(!job) return
 
             return {
@@ -164,11 +164,11 @@ export function applytojobGetPostingParams(db: BetterSQLite3Database, companyNam
     }
 }
 
-export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+export async function ripplingGetPostingParams(db: Db.Database, companyName: string, jobId: string): Promise<PostingParams | undefined> {
     return {
-        company: calculateCompanyParams(lookupCompany(db, Db.ripplingCompany, companyName)),
-        job: ((): JobParams | undefined => {
-            const job = lookupJob(db, Db.ripplingJob, companyName, jobId)
+        company: calculateCompanyParams(await lookupCompany(db, Db.ripplingCompany, companyName)),
+        job: await (async(): Promise<JobParams | undefined> => {
+            const job = await lookupJob(db, Db.ripplingJob, companyName, jobId)
             if(!job) return
 
             const longInfo: Rippling.LongInfo | null = job.longInfo ? JSON.parse(job.longInfo) : null
@@ -189,9 +189,9 @@ if(import.meta.main) {
         process.exit(1)
     }
 
-    const db = drizzle(new Database(process.env.DB_PATH!))
+    const db = drizzle(createClient({ url: 'file:' + process.env.DB_PATH! }))
 
-    const params = (() => {
+    const params = await (() => {
         if(sourceArg === 'ashby') {
             return ashbyhqGetPostingParams(db, companyName, jobId)
         }

@@ -1,5 +1,4 @@
 import * as D from 'drizzle-orm'
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 
 import * as U from '../lib/util.ts'
@@ -11,17 +10,17 @@ import * as C from '../common.ts'
 
 const { bamboohrCompany: Company, bamboohrJob: Job, bamboohrFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
+export async function run(db: Db.Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
     const sampler = sampleSaver.createSampler('bamboohr')
     await import('../sources/bamboohr/companyNames.json', { with: { type: 'json' } }).then(it => {
-        C.populateCompanies(mainLog, db, Company, it.default, {
+        return C.populateCompanies(mainLog, db, Company, it.default, {
             checkedEpochMs: null,
             exists: null,
             tier: 0,
             failCount: 0,
         })
     })
-    C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
+    await C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     const jobsInProgress = new Set<string>()
@@ -41,15 +40,16 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies])
-
-        const jobsToCheckDetails = db.select()
-            .from(FetchJobDetails)
-            .innerJoin(Job, D.and(D.eq(FetchJobDetails.companyName, Job.companyName), D.eq(FetchJobDetails.id, Job.id)))
-            .where(D.not(D.inArray(FetchJobDetails.uniqueId, [...jobsInProgress])))
-            .orderBy(D.asc(FetchJobDetails.addedAt))
-            .limit(5)
-            .all()
+        const [toCheck, jobsToCheckDetails] = await Promise.all([
+            C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies]),
+            db.select()
+                .from(FetchJobDetails)
+                .innerJoin(Job, D.and(D.eq(FetchJobDetails.companyName, Job.companyName), D.eq(FetchJobDetails.id, Job.id)))
+                .where(D.not(D.inArray(FetchJobDetails.uniqueId, [...jobsInProgress])))
+                .orderBy(D.asc(FetchJobDetails.addedAt))
+                .limit(5)
+                .all()
+        ])
 
         mainLog.I(
             'Checking: ',
@@ -76,25 +76,27 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
             }
         }
 
-        for(const it of toCheck.desired) handleCompanny(it, 'I')
-        for(const it of toCheck.relevant) handleCompanny(it, 'II')
-        for(const it of toCheck.other) handleCompanny(it, 'III')
-        for(const it of toCheck.missing) handleCompanny(it, '?')
+        for(const it of toCheck.desired) void(handleCompanny(it, 'I'))
+        for(const it of toCheck.relevant) void(handleCompanny(it, 'II'))
+        for(const it of toCheck.other) void(handleCompanny(it, 'III'))
+        for(const it of toCheck.missing) void(handleCompanny(it, '?'))
 
         for(const { bamboohr_fetch_job_details, bamboohr_job } of jobsToCheckDetails) {
             const log = mainLog.addedCtx([bamboohr_fetch_job_details.companyName], ' job ', [bamboohr_fetch_job_details.id])
-            ;(async() => {
-                try {
-                    jobsInProgress.add(bamboohr_fetch_job_details.uniqueId)
-                    await processJobDetail(db, log, connection, bamboohr_fetch_job_details, bamboohr_job)
-                }
-                catch(err) {
-                    log.E([err])
-                }
-                finally {
-                    jobsInProgress.delete(bamboohr_fetch_job_details.uniqueId)
-                }
-            })()
+            void(
+                (async() => {
+                    try {
+                        jobsInProgress.add(bamboohr_fetch_job_details.uniqueId)
+                        await processJobDetail(db, log, connection, bamboohr_fetch_job_details, bamboohr_job)
+                    }
+                    catch(err) {
+                        log.E([err])
+                    }
+                    finally {
+                        jobsInProgress.delete(bamboohr_fetch_job_details.uniqueId)
+                    }
+                })()
+            )
         }
 
         await U.delay(nextTick)
@@ -102,7 +104,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
 }
 
 async function checkCompany(
-    db: BetterSQLite3Database,
+    db: Db.Database,
     log: L.Log,
     currentTime: number,
     connection: Dispatcher,
@@ -112,7 +114,7 @@ async function checkCompany(
     const result = await request<{ result: FetchJob[] }>(log, connection, `https://${company.name}.bamboohr.com/careers/list`)
     if(result.status === 'rate-limit') return result
 
-    db.update(Company)
+    await db.update(Company)
         .set({ checkedEpochMs: currentTime })
         .where(D.eq(Company.name, company.name))
         .run()
@@ -120,7 +122,7 @@ async function checkCompany(
     if(result.status === 'not-found') {
         log.I('Company does not exist')
 
-        db.update(Company)
+        await db.update(Company)
             .set({ exists: 0, failCount: 0 })
             .where(D.eq(Company.name, company.name))
             .run()
@@ -131,13 +133,13 @@ async function checkCompany(
         const newFailCount = company.failCount + 1
         if(newFailCount >= 10 && company.exists === null) {
             log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
-            db.update(Company)
+            await db.update(Company)
                 .set({ exists: 0, failCount: newFailCount })
                 .where(D.eq(Company.name, company.name))
                 .run()
         }
         else {
-            db.update(Company)
+            await db.update(Company)
                 .set({ failCount: newFailCount })
                 .where(D.eq(Company.name, company.name))
                 .run()
@@ -147,7 +149,7 @@ async function checkCompany(
 
     const initial = company.exists === null
 
-    const existingJobsRows = db.select()
+    const existingJobsRows = await db.select()
         .from(Job)
         .where(D.eq(Job.companyName, company.name))
         .all()
@@ -192,19 +194,19 @@ async function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
+        ? await C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 
-    db.transaction(db => {
-        db.update(Company)
+    await db.transaction(async(db) => {
+        await db.update(Company)
             .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
-            db.insert(Job).values(toInsert).run()
+            await db.insert(Job).values(toInsert).run()
         }
         if(toEnqueueDetails.length > 0) {
-            db.insert(FetchJobDetails).values(toEnqueueDetails).run()
+            await db.insert(FetchJobDetails).values(toEnqueueDetails).run()
         }
     })
 
@@ -219,7 +221,7 @@ async function checkCompany(
 }
 
 async function processJobDetail(
-    db: BetterSQLite3Database,
+    db: Db.Database,
     log: L.Log,
     dispatcher: Dispatcher,
     fetchDetails: D.InferSelectModel<typeof FetchJobDetails>,
@@ -235,7 +237,7 @@ async function processJobDetail(
             const longInfo = JSON.stringify({
                 description: responseResult.data.result.jobOpening.description,
             } satisfies LongInfo)
-            db.update(Job).set({ longInfo }).where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id))).run()
+            await db.update(Job).set({ longInfo }).where(D.and(D.eq(Job.companyName, dbJob.companyName), D.eq(Job.id, dbJob.id))).run()
             dbJob.longInfo = longInfo
         }
         else {
@@ -260,7 +262,7 @@ async function processJobDetail(
             log.I('Job is not relevant after detail check')
         }
 
-        db.update(Job)
+        await db.update(Job)
             .set({
                 relevancy: JSON.stringify({
                     ...JSON.parse(dbJob.relevancy),
@@ -300,7 +302,7 @@ async function processJobDetail(
         )
     }
 
-    db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.uniqueId, fetchDetails.uniqueId)).run()
+    await db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.uniqueId, fetchDetails.uniqueId)).run()
 }
 
 type LongInfo = {
@@ -368,7 +370,7 @@ type FetchJob = {
     locationType: string | null // 0 - on-site, 1 - remote, 2 - hybrid, null have not seen
 }
 
-function calculateTier(_db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
+async function calculateTier(_db: Db.Database, job: D.InferSelectModel<typeof Job>) {
     const info: FetchJob = JSON.parse(job.info)
     if(isLocationRelevant(info)) {
         if(Tier.isJobRelevant(info.jobOpeningName)) return 1

@@ -1,8 +1,8 @@
 import 'dotenv/config'
 import crypto from 'node:crypto'
 
-import Database from 'better-sqlite3'
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
 import System from 'systeminformation'
 
 import { serve } from '@hono/node-server'
@@ -34,7 +34,7 @@ async function main() {
     if(!telegramBotToken) throw new Error('expected bot id is not provided')
     if(!allowedOrigin) throw new Error('allowed origin id is not provided')
 
-    const db = drizzle(new Database(process.env.DB_PATH!))
+    const db = drizzle(createClient({ url: 'file:' + process.env.DB_PATH! }))
 
     const app = new Hono()
 
@@ -98,7 +98,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.ashbyhqGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.ashbyhqGetPostingParams(_db, companyName, jobId))
             }
             else if(url.hostname === 'jobs.lever.co') {
                 const segments = url.pathname.split('/')
@@ -109,7 +109,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.leverGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.leverGetPostingParams(_db, companyName, jobId))
             }
             // TODO: there's also embed url
             else if(url.hostname === 'job-boards.greenhouse.io') {
@@ -121,7 +121,7 @@ async function main() {
                         return c.json({}, { status: 400 })
                     }
 
-                    return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+                    return c.json(await Check.greenhouseGetPostingParams(_db, companyName, jobId))
                 }
                 else {
                     const segments = url.pathname.split('/')
@@ -132,7 +132,7 @@ async function main() {
                         return c.json({}, { status: 400 })
                     }
 
-                    return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
+                    return c.json(await Check.greenhouseGetPostingParams(_db, companyName, jobId))
                 }
             }
             else if(url.hostname.endsWith('.bamboohr.com')) {
@@ -144,7 +144,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.bamboohrGetPostingParams(_db, companyName, jobId))
             }
             else if(url.hostname.endsWith('.zohorecruit.com')) {
                 const segments = url.pathname.split('/')
@@ -155,7 +155,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.zohorecruitGetPostingParams(_db, companyName, jobId))
             }
             else if(url.hostname === 'jobs.gem.com') {
                 const segments = url.pathname.split('/')
@@ -166,7 +166,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.gemGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.gemGetPostingParams(_db, companyName, jobId))
             }
             else if(url.hostname === 'ats.rippling.com') {
                 const segments = url.pathname.split('/')
@@ -177,7 +177,7 @@ async function main() {
                     return c.json({}, { status: 400 })
                 }
 
-                return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
+                return c.json(await Check.ripplingGetPostingParams(_db, companyName, jobId))
             }
 
             log.I('Unknown url')
@@ -193,13 +193,13 @@ async function main() {
 
             const _db = db as any
 
-            if(type === 'ashbyhq') return c.json(Check.ashbyhqGetPostingParams(_db, companyName, jobId))
-            if(type === 'lever') return c.json(Check.leverGetPostingParams(_db, companyName, jobId))
-            if(type === 'greenhouse') return c.json(Check.greenhouseGetPostingParams(_db, companyName, jobId))
-            if(type === 'bamboohr') return c.json(Check.bamboohrGetPostingParams(_db, companyName, jobId))
-            if(type === 'zohorecruit') return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
-            if(type === 'gem') return c.json(Check.gemGetPostingParams(_db, companyName, jobId))
-            if(type === 'rippling') return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
+            if(type === 'ashbyhq') return c.json(await Check.ashbyhqGetPostingParams(_db, companyName, jobId))
+            if(type === 'lever') return c.json(await Check.leverGetPostingParams(_db, companyName, jobId))
+            if(type === 'greenhouse') return c.json(await Check.greenhouseGetPostingParams(_db, companyName, jobId))
+            if(type === 'bamboohr') return c.json(await Check.bamboohrGetPostingParams(_db, companyName, jobId))
+            if(type === 'zohorecruit') return c.json(await Check.zohorecruitGetPostingParams(_db, companyName, jobId))
+            if(type === 'gem') return c.json(await Check.gemGetPostingParams(_db, companyName, jobId))
+            if(type === 'rippling') return c.json(await Check.ripplingGetPostingParams(_db, companyName, jobId))
 
             log.I('Unknown type')
             return c.json({}, { status: 404 })

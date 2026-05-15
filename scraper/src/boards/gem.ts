@@ -1,5 +1,4 @@
 import * as D from 'drizzle-orm'
-import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -11,12 +10,12 @@ import * as C from '../common.ts'
 
 const { gemCompany: Company, gemJob: Job } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
+export async function run(db: Db.Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
     const sampler = sampleSaver.createSampler('gem')
     await import('../sources/gem/companyNames.json', { with: { type: 'json' } }).then(it => {
-        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+        return C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
-    C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
+    await C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false
@@ -35,7 +34,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], {
+        const toCheck = await C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], {
             quota: 2, // too few companies
         })
 
@@ -64,17 +63,17 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
             }
         }
 
-        for(const it of toCheck.missing) handleCompanny(it, '?')
-        for(const it of toCheck.desired) handleCompanny(it, 'I')
-        for(const it of toCheck.relevant) handleCompanny(it, 'II')
-        for(const it of toCheck.other) handleCompanny(it, 'III')
+        for(const it of toCheck.missing) void(handleCompanny(it, '?'))
+        for(const it of toCheck.desired) void(handleCompanny(it, 'I'))
+        for(const it of toCheck.relevant) void(handleCompanny(it, 'II'))
+        for(const it of toCheck.other) void(handleCompanny(it, 'III'))
 
         await U.delay(nextTick)
     }
 }
 
 async function checkCompany(
-    db: BetterSQLite3Database,
+    db: Db.Database,
     log: L.Log,
     currentTime: number,
     connection: N.Connection,
@@ -88,7 +87,7 @@ async function checkCompany(
     })
     if(result.status === 'rate-limit') return result
 
-    db.update(Company)
+    await db.update(Company)
         .set({ checkedEpochMs: currentTime })
         .where(D.eq(Company.name, company.name))
         .run()
@@ -98,7 +97,7 @@ async function checkCompany(
     if(!result.data.jobBoardExternal) {
         log.I('Company does not exist')
 
-        db.update(Company)
+        await db.update(Company)
             .set({ exists: 0 })
             .where(D.eq(Company.name, company.name))
             .run()
@@ -107,7 +106,7 @@ async function checkCompany(
 
     const initial = company.exists === null
 
-    const existingJobsRows = db.select()
+    const existingJobsRows = await db.select()
         .from(Job)
         .where(D.eq(Job.companyName, company.name))
         .all()
@@ -166,16 +165,16 @@ async function checkCompany(
     await Promise.allSettled(promises)
 
     const newTier = toInsert.length > 0
-        ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
+        ? await C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 
-    db.transaction(db => {
-        db.update(Company)
+    await db.transaction(async(db) => {
+        await db.update(Company)
             .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
-            db.insert(Job).values(toInsert).run()
+            await db.insert(Job).values(toInsert).run()
         }
     })
 
@@ -240,7 +239,7 @@ export type JobInfo = {
     }[]
 }
 
-function calculateTier(_db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
+async function calculateTier(_db: Db.Database, job: D.InferSelectModel<typeof Job>) {
     const info: JobInfo = JSON.parse(job.info)
     if(isLocationRelevant(info)) {
         if(Tier.isJobRelevant(info.title)) return 1
