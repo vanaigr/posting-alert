@@ -461,11 +461,13 @@ type ApiJobPosting = null | {
 
 export function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
     const infoRaw = JSON.parse(job.shortInfo).job
-    if(!infoRaw) return 3
-    if(isLocationRelevant(db, infoRaw)) {
-        if(Tier.isJobRelevant(infoRaw.title)) return 1
-        return 2
+    if(infoRaw) {
+        if(isLocationRelevant(db, infoRaw)) {
+            if(Tier.isJobRelevant(infoRaw.title)) return 1
+            return 2
+        }
     }
+    return 3
 }
 
 export function getJobLocation(job: any) {
