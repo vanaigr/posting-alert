@@ -13,6 +13,7 @@ import * as Bamboohr from './boards/bamboohr.ts'
 import * as Zohorecruit from './boards/zohorecruit.ts'
 import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
+import * as Applytojob from './boards/applytojob.ts'
 
 let mainLog: L.Log | undefined
 
@@ -42,6 +43,7 @@ async function main() {
         Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
         Gem.run(db, mainLog.addedCtx('gem')),
         Rippling.run(db, mainLog.addedCtx('rippling')),
+        Applytojob.run(db, mainLog.addedCtx('applytojob')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

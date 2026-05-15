@@ -186,6 +186,39 @@ export const ripplingFetchJobDetails = sqliteTable('rippling_fetch_job_details',
 })
 
 
+export const applytojobCompany = sqliteTable('applytojob_company', {
+    name: text('name').primaryKey(),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
+})
+
+export const applytojobJob = sqliteTable(
+    'applytojob_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+        longInfo: text('long_info'),
+        relevancy: text('relevancy').notNull(),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ],
+)
+
+export const applytojobFetchJobDetails = sqliteTable('applytojob_fetch_job_details', {
+    uniqueId: text('unique_id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
+})
+
+
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     message: text('message').notNull(),
@@ -622,6 +655,38 @@ PRAGMA mmap_size = 268435456;
         if (version === 26) {
             tx.run(sql`CREATE INDEX location_classification_is_in_us_empty ON location_classification(is_in_us) where is_in_us = ''`)
             tx.run(sql`PRAGMA user_version = 27`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 27) {
+            tx.run(sql`CREATE TABLE applytojob_company (
+                name TEXT PRIMARY KEY,
+                checked_epoch_ms INTEGER,
+                "exists" INTEGER,
+                fail_count INTEGER NOT NULL,
+                tier INTEGER NOT NULL
+            )`)
+            tx.run(sql`CREATE TABLE applytojob_job (
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                fetched_epoch_ms INTEGER NOT NULL,
+                info TEXT NOT NULL,
+                long_info TEXT,
+                relevancy TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY(company_name, id)
+            )`)
+            tx.run(sql`CREATE TABLE applytojob_fetch_job_details (
+                unique_id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                id TEXT NOT NULL,
+                added_at INTEGER NOT NULL,
+                job_posted_after INTEGER NOT NULL,
+                company_tier TEXT NOT NULL
+            )`)
+            tx.run(sql`CREATE INDEX applytojob_company_exists_tier_checked_idx ON applytojob_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 28`)
         }
     })
 

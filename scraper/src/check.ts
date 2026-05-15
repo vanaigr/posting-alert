@@ -148,6 +148,22 @@ export function gemGetPostingParams(db: BetterSQLite3Database, companyName: stri
     }
 }
 
+export function applytojobGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+    return {
+        company: calculateCompanyParams(lookupCompany(db, Db.applytojobCompany, companyName)),
+        job: ((): JobParams | undefined => {
+            const job = lookupJob(db, Db.applytojobJob, companyName, jobId)
+            if(!job) return
+
+            return {
+                fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: null,
+                ...unpackRelevancy(job.relevancy),
+            }
+        })(),
+    }
+}
+
 export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
     return {
         company: calculateCompanyParams(lookupCompany(db, Db.ripplingCompany, companyName)),
@@ -196,6 +212,9 @@ if(import.meta.main) {
         }
         else if(sourceArg === 'rippling') {
             return ripplingGetPostingParams(db, companyName, jobId)
+        }
+        else if(sourceArg === 'applytojob') {
+            return applytojobGetPostingParams(db, companyName, jobId)
         }
     })()
     if(params === undefined) {
