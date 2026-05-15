@@ -10,6 +10,8 @@ import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../common.ts'
 
+// Scraper info from: https://github.com/kalil0321/ats-scrapers/blob/main/src/jobhive/scrapers/jazzhr.py
+
 const { applytojobCompany: Company, applytojobJob: Job, applytojobFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
