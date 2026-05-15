@@ -388,6 +388,7 @@ type RawJob = { id: string, title: string, location: string }
 function extractJobs(html: string) {
     const jobs: RawJob[] = []
 
+    let seenColumn = false
     let inColumnDepth = 0
     let currentHref: string | null = null
     let currentTitleParts: string[] = []
@@ -404,6 +405,7 @@ function extractJobs(html: string) {
     const parser = new htmlparser2.Parser({
         onopentag(name, attribs) {
             if(attribs.id === "jobs_column") {
+                seenColumn = true
                 inColumnDepth++
             }
             else if(inColumnDepth > 0) {
@@ -455,6 +457,8 @@ function extractJobs(html: string) {
     })
     parser.write(html)
     parser.end()
+
+    if(!seenColumn) return undefined
 
     const n = Math.min(pendingAnchors.length, pendingLocations.length)
     for(let i = 0; i < n; i++) {
