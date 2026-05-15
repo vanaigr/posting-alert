@@ -11,7 +11,8 @@ import * as C from '../common.ts'
 
 const { gemCompany: Company, gemJob: Job } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
+    const sampler = sampleSaver.createSampler('gem')
     await import('../sources/gem/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
@@ -31,6 +32,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log) {
         }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
+        sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], {

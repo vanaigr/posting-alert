@@ -33,17 +33,19 @@ async function main() {
     const db = drizzle(new Database(process.env.DB_PATH!))
     Db.migrate(db)
 
+    const sampleSaver = new C.SampleSaver()
+
     await Promise.race([
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
         C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
-        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        Lever.run(db, mainLog.addedCtx('lever')),
-        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
-        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
-        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
-        Gem.run(db, mainLog.addedCtx('gem')),
-        Rippling.run(db, mainLog.addedCtx('rippling')),
-        Applytojob.run(db, mainLog.addedCtx('applytojob')),
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), sampleSaver),
+        Lever.run(db, mainLog.addedCtx('lever'), sampleSaver),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse'), sampleSaver),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr'), sampleSaver),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit'), sampleSaver),
+        Gem.run(db, mainLog.addedCtx('gem'), sampleSaver),
+        Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
+        Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

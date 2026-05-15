@@ -1,3 +1,4 @@
+import * as fs from 'node:fs/promises'
 import * as D from 'drizzle-orm'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as htmlparser2 from 'htmlparser2'
@@ -121,6 +122,45 @@ export async function runLocationClassificationService(db: BetterSQLite3Database
         }
         else {
             await U.delay(T.Now.instant().add({ seconds: 60 }))
+        }
+    }
+}
+
+export class Sampler {
+    count = 0
+    constructor(public name: string) {}
+}
+
+export class SampleSaver {
+    private samplers: Sampler[] = []
+
+    constructor() {
+        this.run()
+    }
+
+    createSampler(name: string): Sampler {
+        const sampler = new Sampler(name)
+        this.samplers.push(sampler)
+        return sampler
+    }
+
+    private async run() {
+        while(true) {
+            await U.delay(T.Now.instant().add({ minutes: 1 }))
+
+            const time = T.Now.instant()
+                .toZonedDateTimeISO(process.env.SEARCH_TIMEZONE!)
+                .toPlainTime()
+                .toString()
+
+            let out = time + ':\n'
+            for(const sampler of this.samplers) {
+                out += `  - ${sampler.name}: ${sampler.count}\n`
+                sampler.count = 0
+            }
+            out += '\n'
+
+            await fs.appendFile('./samples.txt', out)
         }
     }
 }
