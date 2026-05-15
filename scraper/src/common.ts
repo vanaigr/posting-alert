@@ -149,6 +149,8 @@ export class SampleSaver {
     }
 
     private async run() {
+        if(!process.env.RECORD_SAMPLES) return
+
         while(true) {
             await U.delay(T.Now.instant().add({ minutes: 1 }))
 
