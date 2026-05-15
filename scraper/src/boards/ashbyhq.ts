@@ -178,21 +178,23 @@ async function checkCompany(
     for(const job of jobBoard.jobPostings) {
         if(existingJobs.has(job.id)) continue
 
+        const info: ShortInfo = {
+            job,
+            team: jobBoard.teams.find(it => it.id === job.teamId) ?? null,
+        }
+
         const jobDesired = Tier.isJobDesired(job.title, undefined)
-        const locationDesired = isLocationDesired(db, job)
+        const locationDesired = isLocationDesired(db, { info, longInfo: null })
 
         toInsert.push({
             id: job.id,
             companyName: company.name,
-            shortInfo: JSON.stringify({
-                job,
-                team: jobBoard.teams.find(it => it.id === job.teamId) ?? null,
-            }),
+            shortInfo: JSON.stringify(info),
             longInfo: null,
             fetchedEpochMs: currentTime,
             relevancy: JSON.stringify({
                 jr: Tier.isJobRelevant(job.title),
-                lr: isLocationRelevant(db, job),
+                lr: isLocationRelevant(db, { info, longInfo: null }),
                 jd: jobDesired,
                 ld: locationDesired,
             }),
@@ -242,8 +244,7 @@ async function processJobDetail(
     log: L.Log,
     fetchRow: { ashbyhq_job: D.InferSelectModel<typeof Job>, ashby_fetch_job_details: D.InferSelectModel<typeof FetchJobDetails> },
 ) {
-    const shortInfo = JSON.parse(fetchRow.ashbyhq_job.shortInfo)
-    const job = shortInfo.job
+    const info: ShortInfo = JSON.parse(fetchRow.ashbyhq_job.shortInfo)
 
     let shouldSend = false
     if(!fetchRow.ashbyhq_job.longInfo) {
@@ -251,10 +252,10 @@ async function processJobDetail(
         shouldSend = true
     }
     else {
-        const detail = JSON.parse(fetchRow.ashbyhq_job.longInfo)
+        const longInfo: LongInfo = JSON.parse(fetchRow.ashbyhq_job.longInfo)
 
-        const jobDesired = Tier.isJobDesired(job.title, detail.descriptionHtml ? C.parseHtml(detail.descriptionHtml) : undefined)
-        const locationDesired = await isLocationDesiredFull(log, db, job)
+        const jobDesired = Tier.isJobDesired(info.job.title, longInfo.descriptionHtml ? C.parseHtml(longInfo.descriptionHtml) : undefined)
+        const locationDesired = await isLocationDesiredFull(log, db, { info, longInfo })
         if(jobDesired && locationDesired) {
             log.I('Job is still relevant after detail check')
             shouldSend = true
@@ -283,8 +284,8 @@ async function processJobDetail(
         await C.sendMessage(
             log,
             db,
-            job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
-                + job.workplaceType + ': ' + getJobLocation(job) + '\n'
+            info.job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
+                + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
                 + `Ashby ${tier} < ${maxAgo} ago: `
                 + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
         )
@@ -459,32 +460,45 @@ type ApiJobPosting = null | {
     compensationTierSummary: string | null
 }
 
+type ShortInfo = {
+    job: (ApiJobBoardWithTeams & {})['jobPostings'][number]
+    team: (ApiJobBoardWithTeams & {})['teams'][number] | null
+}
+type LongInfo = ApiJobPosting & {}
+
 export function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const infoRaw = JSON.parse(job.shortInfo).job
-    if(infoRaw) {
-        if(isLocationRelevant(db, infoRaw)) {
-            if(Tier.isJobRelevant(infoRaw.title)) return 1
-            return 2
-        }
+    const info: ShortInfo = JSON.parse(job.shortInfo)
+    const longInfo: LongInfo | null = JSON.parse(job.longInfo ?? 'null')
+    if(isLocationRelevant(db, { info, longInfo })) {
+        if(Tier.isJobRelevant(info.job.title)) return 1
+        return 2
     }
     return 3
 }
 
-export function getJobLocation(job: any) {
-    return [job.locationName, ...(job.secondaryLocations ?? []).map((it: any) => it.locationName)].join(' | ')
+export function getJobLocation(info: ShortInfo) {
+    return [info.job.locationName, ...(info.job.secondaryLocations ?? []).map((it: any) => it.locationName)].join(' | ')
 }
-export function isLocationRelevant(db: BetterSQLite3Database, job: any) {
-    return Tier.isLocationRelevant(db, getJobLocation(job), {
-        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+export function isLocationRelevant(db: BetterSQLite3Database, job: { info: ShortInfo, longInfo: LongInfo | null }) {
+    return Tier.isLocationRelevant(db, getJobLocation(job.info), {
+        remote: isRemote(job),
     })
 }
-export function isLocationDesired(db: BetterSQLite3Database, job: any) {
-    return Tier.isLocationDesired(db, getJobLocation(job), {
-        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+export function isLocationDesired(db: BetterSQLite3Database, job: { info: ShortInfo, longInfo: LongInfo | null }) {
+    return Tier.isLocationDesired(db, getJobLocation(job.info), {
+        remote: isRemote(job),
     })
 }
-export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: any) {
-    return await Tier.isLocationDesiredFull(log, db, getJobLocation(job), {
-        remote: job.workplaceType !== 'OnSite' && job.workplaceType !== 'Hybrid',
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: { info: ShortInfo, longInfo: LongInfo | null }) {
+    return await Tier.isLocationDesiredFull(log, db, getJobLocation(job.info), {
+        remote: isRemote(job),
     })
+}
+
+function isRemote(job: { info: ShortInfo, longInfo: LongInfo | null }) {
+    if(job.info.job.workplaceType === 'Remote') return true
+    if(job.info.job.workplaceType !== 'OnSite' && job.info.job.workplaceType !== 'Hybrid') {
+        const description = job.longInfo?.descriptionHtml ? C.parseHtml(job.longInfo?.descriptionHtml) : ''
+        return !description || /(?<!not )(?<!not a )\bremote/i.test(description)
+    }
 }
