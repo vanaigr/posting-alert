@@ -45,6 +45,8 @@ const MAX_SAMPLES = 30
 const TYPES = ['ashbyhq', 'lever', 'greenhouse', 'bamboohr', 'zohorecruit', 'gem', 'rippling'] as const
 type Type = typeof TYPES[number]
 
+// TODO: add applytojob
+
 function formatBytes(bytes: number): string {
     if(bytes < 0) return 'N/A'
     const gb = bytes / (1024 * 1024 * 1024)

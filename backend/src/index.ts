@@ -14,6 +14,7 @@ import * as Check from '../../scraper/src/check.ts'
 
 let mainLog: L.Log | undefined
 
+// TODO: add applytojob
 
 const expectedUserId = process.env.TELEGRAM_USER_ID
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
