@@ -31,7 +31,6 @@ export const citiesStatesRegex3 = new RegExp(
     'i'
 )
 
-// NOTE: if this is changed, add a migration that resets tiers for the companies.
 const titleRegex = /(engineer|developer|programmer)/i
 export function isJobRelevant(title: string) {
     return titleRegex.test(title)
