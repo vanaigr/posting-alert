@@ -1,6 +1,7 @@
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { sql } from 'drizzle-orm'
 import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
+import type { Client } from '@libsql/client'
 
 export type Database = LibSQLDatabase
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -694,4 +695,90 @@ PRAGMA mmap_size = 268435456;
 
 async function dbVersion(db: Database | Transaction) {
     return (await db.get(sql`PRAGMA user_version`) as { user_version: number }).user_version
+}
+
+class Mutex {
+    private tail: Promise<void> = Promise.resolve()
+
+    async lock(): Promise<() => void> {
+        const { promise: gate, resolve: release } = Promise.withResolvers<void>()
+        const prev = this.tail
+        this.tail = this.tail.then(() => gate)
+        await prev
+        return release
+    }
+}
+
+// Libsql fails on mulltiple writes happeining in parallel.
+// We wrap the client so every execute/batch and the whole span of each interactive
+// transaction runs under a single mutex. The slow part (network fetches) stays outside the lock.
+export function serializeClient(client: Client): Client {
+    const mutex = new Mutex()
+
+    const lockAround = (fn: (...args: any[]) => Promise<unknown>) =>
+        async(...args: any[]) => {
+            const release = await mutex.lock()
+            try {
+                return await fn(...args)
+            }
+            finally {
+                release()
+            }
+        }
+
+    return new Proxy(client, {
+        get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver)
+
+            if(prop === 'execute' || prop === 'batch' || prop === 'executeMultiple' || prop === 'migrate') {
+                return lockAround((value as (...a: any[]) => Promise<unknown>).bind(target))
+            }
+
+            if(prop === 'transaction') {
+                return async(...args: any[]) => {
+                    const release = await mutex.lock()
+                    let tx
+                    try {
+                        tx = await (value as (...a: any[]) => Promise<any>)
+                            .apply(target, args)
+                    }
+                    catch(err) {
+                        release()
+                        throw err
+                    }
+
+                    let released = false
+                    const releaseOnce = () => {
+                        if(released) return
+                        released = true
+                        release()
+                    }
+
+                    // The transaction owns the lock for its whole lifetime;
+                    // its own statements run through `tx` (no re-locking), and
+                    // the lock is handed back only on commit/rollback/close.
+                    return new Proxy(tx, {
+                        get(t, p, r) {
+                            const v = Reflect.get(t, p, r)
+                            if(p === 'commit' || p === 'rollback' || p === 'close') {
+                                return async(...a: any[]) => {
+                                    try {
+                                        return await (v as (...x: any[]) => Promise<unknown>).apply(t, a)
+                                    }
+                                    finally {
+                                        releaseOnce()
+                                    }
+                                }
+                            }
+                            if(typeof v === 'function') return (v as (...x: any[]) => unknown).bind(t)
+                            return v
+                        },
+                    })
+                }
+            }
+
+            if(typeof value === 'function') return (value as (...a: any[]) => unknown).bind(target)
+            return value
+        },
+    })
 }

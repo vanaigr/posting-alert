@@ -189,7 +189,7 @@ if(import.meta.main) {
         process.exit(1)
     }
 
-    const db = drizzle(createClient({ url: 'file:' + process.env.DB_PATH! }))
+    const db = drizzle(Db.serializeClient(createClient({ url: 'file:' + process.env.DB_PATH! })))
 
     const params = await (() => {
         if(sourceArg === 'ashby') {

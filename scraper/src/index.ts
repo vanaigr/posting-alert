@@ -30,7 +30,7 @@ async function main() {
         mainLog.E('Unhandled rejection from ', [promise], ': ', [reason])
     })
 
-    const db = drizzle(createClient({ url: 'file:' + process.env.DB_PATH! }))
+    const db = drizzle(Db.serializeClient(createClient({ url: 'file:' + process.env.DB_PATH! })))
     await Db.migrate(db)
 
     const sampleSaver = new C.SampleSaver()

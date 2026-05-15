@@ -10,6 +10,7 @@ import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
+import * as Db from './lib/db.ts'
 import * as Check from '../../scraper/src/check.ts'
 
 let mainLog: L.Log | undefined
@@ -34,7 +35,7 @@ async function main() {
     if(!telegramBotToken) throw new Error('expected bot id is not provided')
     if(!allowedOrigin) throw new Error('allowed origin id is not provided')
 
-    const db = drizzle(createClient({ url: 'file:' + process.env.DB_PATH! }))
+    const db = drizzle(Db.serializeClient(createClient({ url: 'file:' + process.env.DB_PATH! })))
 
     const app = new Hono()
 
