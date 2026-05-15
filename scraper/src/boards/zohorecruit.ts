@@ -120,7 +120,7 @@ async function checkCompany(
         .where(D.eq(Company.name, company.name))
         .run()
 
-    if(result.status === 'not-found' || !jobs) {
+    if(result.status === 'not-found' || (result.status === 'ok' && !jobs)) {
         log.I('Company does not exist')
 
         db.update(Company)
@@ -158,7 +158,7 @@ async function checkCompany(
 
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
-    for(const rawJob of jobs) {
+    for(const rawJob of jobs!) {
         if(typeof rawJob.id !== 'string') continue
 
         if(existingJobs.has(rawJob.id)) continue
