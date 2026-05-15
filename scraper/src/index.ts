@@ -34,15 +34,15 @@ async function main() {
     Db.migrate(db)
 
     await Promise.race([
-        //C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
-        //C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
-        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
-        //Lever.run(db, mainLog.addedCtx('lever')),
-        //Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
-        //Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
-        //Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
-        //Gem.run(db, mainLog.addedCtx('gem')),
-        //Rippling.run(db, mainLog.addedCtx('rippling')),
+        C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
+        C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq')),
+        Lever.run(db, mainLog.addedCtx('lever')),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse')),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr')),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit')),
+        Gem.run(db, mainLog.addedCtx('gem')),
+        Rippling.run(db, mainLog.addedCtx('rippling')),
         Applytojob.run(db, mainLog.addedCtx('applytojob')),
     ])
 
