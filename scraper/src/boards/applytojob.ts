@@ -237,9 +237,11 @@ async function processJobDetail(
 ) {
     const job = JSON.parse(dbJob.info) as JobInfo
 
+    const jobUrl = dbJob.id.startsWith('/') ? `https://${dbJob.companyName}.applytojob.com${dbJob.id}` : dbJob.id
+
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
-        const responseResult = await request(log, dispatcher, dbJob.id.startsWith('/') ? `https://${dbJob.companyName}.applytojob.com${dbJob.id}` : dbJob.id)
+        const responseResult = await request(log, dispatcher, jobUrl)
         if(responseResult.status === 'ok') {
             const posting = extractJobPosting(log, responseResult.data)
             if(posting) {
@@ -288,7 +290,7 @@ async function processJobDetail(
 
     if(shouldSend) {
         const longInfo = dbJob.longInfo ? JSON.parse(dbJob.longInfo) as LongInfo : null
-        const url = longInfo?.url || `https://${dbJob.companyName}.applytojob.com${dbJob.id}`
+        const url = longInfo?.url || jobUrl
 
         const maxAgo = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
