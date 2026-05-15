@@ -241,7 +241,7 @@ async function processJobDetail(
 
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
-        const responseResult = await request(log, dispatcher, jobUrl)
+        const responseResult = await request(log, dispatcher, jobUrl, 3)
         if(responseResult.status === 'ok') {
             const posting = extractJobPosting(log, responseResult.data)
             if(posting) {
@@ -317,32 +317,41 @@ export type LongInfo = {
     locationRequirements: { '@type': string, name: string } | null
 }
 
-async function request(log: L.Log, connection: Dispatcher | undefined, url: string) {
-    try {
-        const response = await undiciFetch(url, { dispatcher: connection })
-        if(response.status === 429) {
-            log.E('Rate limited')
-            await response.text().catch(() => {})
-            return U.status('rate-limit')
-        }
+async function request(log0: L.Log, connection: Dispatcher | undefined, url: string, tries: number = 1) {
+    for(let t = 0; t < tries; t++) {
+        const log = t === 0 ? log0 : log0.addedCtx('try ', [t])
 
-        if(response.status === 404) {
-            await response.text().catch(err => err)
-            log.E('Not found')
-            return U.status('not-found')
-        }
-        if(response.status !== 200) {
-            log.E('Request failed: ', [response.status], ': ', [await response.text().catch(err => err)])
-            return U.status('error')
-        }
+        try {
+            const response = await undiciFetch(url, { dispatcher: connection })
+            if(response.status === 429) {
+                log.E('Rate limited')
+                await response.text().catch(() => {})
+                return U.status('rate-limit')
+            }
 
-        const html = await response.text()
-        return U.result('ok', html)
+            if(response.status === 404) {
+                await response.text().catch(err => err)
+                log.E('Not found')
+                return U.status('not-found')
+            }
+            if(response.status !== 200) {
+                log.E('Request failed: ', [response.status], ': ', [await response.text().catch(err => err)])
+                continue
+            }
+
+            const html = await response.text()
+            return U.result('ok', html)
+        }
+        catch(err) {
+            log.E('While requesting: ', [err])
+            continue
+        }
     }
-    catch(err) {
-        log.E('While requesting: ', [err])
-        return U.status('error')
+
+    if(tries !== 0) {
+        log0.I('Returning error after ', [tries], ' tries')
     }
+    return U.status('error')
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
