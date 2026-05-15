@@ -1,19 +1,15 @@
 {
     "type": "module",
-    "scripts": {
-        "lint": "eslint ."
-    },
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^25.6.0",
         "drizzle-kit": "^0.31.10",
-        "eslint": "^9.39.0",
-        "typescript": "^6.0.3",
-        "typescript-eslint": "^8.46.0"
+        "typescript": "^6.0.3"
     },
     "dependencies": {
         "@hono/node-server": "^2.0.1",
-        "@libsql/client": "^0.17.3",
         "@openrouter/sdk": "^0.12.35",
+        "better-sqlite3": "^12.9.0",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
         "hono": "^4.12.16",

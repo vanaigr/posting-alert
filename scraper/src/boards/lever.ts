@@ -1,4 +1,5 @@
 import * as D from 'drizzle-orm'
+import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -10,12 +11,12 @@ import * as C from '../common.ts'
 
 const { lCompany: Company, lJob: Job } = Db
 
-export async function run(db: Db.Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
     const sampler = sampleSaver.createSampler('lever')
     await import('../sources/lever/companyNames.json', { with: { type: 'json' } }).then(it => {
-        return C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
     })
-    await C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
+    C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
     const companiesInProcess = new Set<string>()
     let rateLimit = false
@@ -34,7 +35,7 @@ export async function run(db: Db.Database, mainLog: L.Log, sampleSaver: C.Sample
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = await C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies])
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies])
 
         mainLog.I(
             'Checking: ',
@@ -61,17 +62,17 @@ export async function run(db: Db.Database, mainLog: L.Log, sampleSaver: C.Sample
             }
         }
 
-        for(const it of toCheck.desired) void(handleCompanny(it, 'I'))
-        for(const it of toCheck.relevant) void(handleCompanny(it, 'II'))
-        for(const it of toCheck.other) void(handleCompanny(it, 'III'))
-        for(const it of toCheck.missing) void(handleCompanny(it, '?'))
+        for(const it of toCheck.desired) handleCompanny(it, 'I')
+        for(const it of toCheck.relevant) handleCompanny(it, 'II')
+        for(const it of toCheck.other) handleCompanny(it, 'III')
+        for(const it of toCheck.missing) handleCompanny(it, '?')
 
         await U.delay(nextTick)
     }
 }
 
 async function checkCompany(
-    db: Db.Database,
+    db: BetterSQLite3Database,
     log: L.Log,
     currentTime: number,
     connection: N.Connection,
@@ -81,7 +82,7 @@ async function checkCompany(
     const result = await requestCompany(log, connection, company.name)
     if(result.status === 'rate-limit') return result
 
-    await db.update(Company)
+    db.update(Company)
         .set({ checkedEpochMs: currentTime })
         .where(D.eq(Company.name, company.name))
         .run()
@@ -89,7 +90,7 @@ async function checkCompany(
     if(result.status === 'not-found') {
         log.I('Company does not exist')
 
-        await db.update(Company)
+        db.update(Company)
             .set({ exists: 0 })
             .where(D.eq(Company.name, company.name))
             .run()
@@ -100,7 +101,7 @@ async function checkCompany(
 
     const initial = company.exists === null
 
-    const existingJobsRows = await db.select()
+    const existingJobsRows = db.select()
         .from(Job)
         .where(D.eq(Job.companyName, company.name))
         .all()
@@ -113,11 +114,11 @@ async function checkCompany(
         if(existingJobs.has(job.id)) continue
 
         const jobDesired = Tier.isJobDesired(job.text, job.descriptionPlain)
-        const locationDesired = await isLocationDesired(db, job)
+        const locationDesired = isLocationDesired(db, job)
 
         const relevancy: Record<string, unknown> = {
             jr: Tier.isJobRelevant(job.text),
-            lr: await isLocationRelevant(db, job),
+            lr: isLocationRelevant(db, job),
             jd: jobDesired,
             ld: locationDesired,
         }
@@ -175,16 +176,16 @@ async function checkCompany(
     }
 
     const newTier = toInsert.length > 0
-        ? await C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
+        ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 
-    await db.transaction(async(db) => {
-        await db.update(Company)
+    db.transaction(db => {
+        db.update(Company)
             .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
-            await db.insert(Job).values(toInsert).run()
+            db.insert(Job).values(toInsert).run()
         }
     })
 
@@ -258,28 +259,28 @@ export type FetchJob = {
     applyUrl: string
 }
 
-async function calculateTier(db: Db.Database, job: D.InferSelectModel<typeof Job>) {
+function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
     const info: JobInfo = JSON.parse(job.info)
-    if(await isLocationRelevant(db, info)) {
+    if(isLocationRelevant(db, info)) {
         if(Tier.isJobRelevant(info.text)) return 1
         return 2
     }
     return 3
 }
 
-export async function isLocationRelevant(db: Db.Database, info: JobInfo) {
-    return await Tier.isLocationRelevant(db, getJobLocation(info), {
+export function isLocationRelevant(db: BetterSQLite3Database, info: JobInfo) {
+    return Tier.isLocationRelevant(db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
         remote: isRemote(info),
     })
 }
-export async function isLocationDesired(db: Db.Database, info: JobInfo) {
-    return await Tier.isLocationDesired(db, getJobLocation(info), {
+export function isLocationDesired(db: BetterSQLite3Database, info: JobInfo) {
+    return Tier.isLocationDesired(db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
         remote: isRemote(info),
     })
 }
-export async function isLocationDesiredFull(log: L.Log, db: Db.Database, info: JobInfo) {
+export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, info: JobInfo) {
     return await Tier.isLocationDesiredFull(log, db, getJobLocation(info), {
         mentionsUs: info.country === 'US',
         remote: isRemote(info),

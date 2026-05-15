@@ -1,10 +1,9 @@
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
+import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { sql } from 'drizzle-orm'
 import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
-import type { Client } from '@libsql/client'
 
-export type Database = LibSQLDatabase
-export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+import Database from 'better-sqlite3'
+import type { SQLiteTransaction } from 'drizzle-orm/sqlite-core'
 
 export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
@@ -238,101 +237,101 @@ export const generationResponse = sqliteTable('generation_response', {
 })
 
 
-export async function migrate(db: Database) {
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+export function migrate(db: BetterSQLite3Database) {
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 0) {
-            await tx.run(sql`CREATE TABLE company (
+            tx.run(sql`CREATE TABLE company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER
             )`)
-            await tx.run(sql`CREATE TABLE job (
+            tx.run(sql`CREATE TABLE job (
                 id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 1`)
+            tx.run(sql`PRAGMA user_version = 1`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 1) {
-            await tx.run(sql`ALTER TABLE job ADD COLUMN to_fetch INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`PRAGMA user_version = 2`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN to_fetch INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`PRAGMA user_version = 2`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 2) {
-            await tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT NOT NULL`)
-            await tx.run(sql`ALTER TABLE job ADD COLUMN long_info TEXT`)
-            await tx.run(sql`PRAGMA user_version = 3`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN short_info TEXT NOT NULL`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN long_info TEXT`)
+            tx.run(sql`PRAGMA user_version = 3`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 3) {
-            await tx.run(sql`CREATE TABLE to_review (
+            tx.run(sql`CREATE TABLE to_review (
                 id TEXT PRIMARY KEY
             )`)
-            await tx.run(sql`PRAGMA user_version = 4`)
+            tx.run(sql`PRAGMA user_version = 4`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 4) {
-            await tx.run(sql`ALTER TABLE job ADD COLUMN fetched_epoch_ms INTEGER`)
-            await tx.run(sql`PRAGMA user_version = 5`)
+            tx.run(sql`ALTER TABLE job ADD COLUMN fetched_epoch_ms INTEGER`)
+            tx.run(sql`PRAGMA user_version = 5`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 5) {
-            await tx.run(sql`ALTER TABLE company RENAME TO ashbyhq_company`)
-            await tx.run(sql`ALTER TABLE job RENAME TO ashbyhq_job`)
-            await tx.run(sql`ALTER TABLE to_review RENAME TO ashbyhq_to_review`)
-            await tx.run(sql`PRAGMA user_version = 6`)
+            tx.run(sql`ALTER TABLE company RENAME TO ashbyhq_company`)
+            tx.run(sql`ALTER TABLE job RENAME TO ashbyhq_job`)
+            tx.run(sql`ALTER TABLE to_review RENAME TO ashbyhq_to_review`)
+            tx.run(sql`PRAGMA user_version = 6`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 6) {
-            await tx.run(sql`CREATE TABLE lever_company (
+            tx.run(sql`CREATE TABLE lever_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER
             )`)
-            await tx.run(sql`CREATE TABLE lever_job (
+            tx.run(sql`CREATE TABLE lever_job (
                 id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
                 info TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 7`)
+            tx.run(sql`PRAGMA user_version = 7`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 7) {
-            await tx.run(sql`CREATE TABLE greenhouse_company (
+            tx.run(sql`CREATE TABLE greenhouse_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER
             )`)
-            await tx.run(sql`CREATE TABLE greenhouse_job (
+            tx.run(sql`CREATE TABLE greenhouse_job (
                 id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
                 info TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 8`)
+            tx.run(sql`PRAGMA user_version = 8`)
         }
     })
 
@@ -343,78 +342,78 @@ PRAGMA cache_size = -64000;
 PRAGMA temp_store = MEMORY;
 PRAGMA mmap_size = 268435456;
     */
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 8) {
-            await tx.run(sql`CREATE INDEX ashbyhq_job_company_name_idx ON ashbyhq_job(company_name)`)
-            await tx.run(sql`CREATE INDEX lever_job_company_name_idx ON lever_job(company_name)`)
-            await tx.run(sql`CREATE INDEX greenhouse_job_company_name_idx ON greenhouse_job(company_name)`)
-            await tx.run(sql`CREATE INDEX ashbyhq_company_exists_checked_idx ON ashbyhq_company("exists", checked_epoch_ms)`)
-            await tx.run(sql`CREATE INDEX lever_company_exists_checked_idx ON lever_company("exists", checked_epoch_ms)`)
-            await tx.run(sql`CREATE INDEX greenhouse_company_exists_checked_idx ON greenhouse_company("exists", checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 9`)
+            tx.run(sql`CREATE INDEX ashbyhq_job_company_name_idx ON ashbyhq_job(company_name)`)
+            tx.run(sql`CREATE INDEX lever_job_company_name_idx ON lever_job(company_name)`)
+            tx.run(sql`CREATE INDEX greenhouse_job_company_name_idx ON greenhouse_job(company_name)`)
+            tx.run(sql`CREATE INDEX ashbyhq_company_exists_checked_idx ON ashbyhq_company("exists", checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX lever_company_exists_checked_idx ON lever_company("exists", checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_exists_checked_idx ON greenhouse_company("exists", checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 9`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 9) {
-            await tx.run(sql`CREATE TABLE bamboohr_company (
+            tx.run(sql`CREATE TABLE bamboohr_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER
             )`)
-            await tx.run(sql`CREATE TABLE bamboohr_job (
+            tx.run(sql`CREATE TABLE bamboohr_job (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
                 info TEXT NOT NULL,
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`CREATE INDEX bamboohr_company_exists_checked_idx ON bamboohr_company("exists", checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 10`)
+            tx.run(sql`CREATE INDEX bamboohr_company_exists_checked_idx ON bamboohr_company("exists", checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 10`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 10) {
-            await tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`PRAGMA user_version = 11`)
+            tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`PRAGMA user_version = 11`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 11) {
-            await tx.run(sql`CREATE TABLE pending_notification (
+            tx.run(sql`CREATE TABLE pending_notification (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 message TEXT NOT NULL,
                 original_epoch_ms INTEGER NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 12`)
+            tx.run(sql`PRAGMA user_version = 12`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 12) {
-            await tx.run(sql`ALTER TABLE ashbyhq_job DROP COLUMN to_fetch`)
-            await tx.run(sql`CREATE TABLE ashby_fetch_job_details (
+            tx.run(sql`ALTER TABLE ashbyhq_job DROP COLUMN to_fetch`)
+            tx.run(sql`CREATE TABLE ashby_fetch_job_details (
                 id TEXT PRIMARY KEY,
                 added_at INTEGER NOT NULL,
                 job_posted_after INTEGER NOT NULL,
                 company_tier TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 13`)
+            tx.run(sql`PRAGMA user_version = 13`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 13) {
-            await tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN long_info TEXT`)
-            await tx.run(sql`CREATE TABLE bamboohr_fetch_job_details (
+            tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN long_info TEXT`)
+            tx.run(sql`CREATE TABLE bamboohr_fetch_job_details (
                 unique_id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
@@ -422,80 +421,80 @@ PRAGMA mmap_size = 268435456;
                 job_posted_after INTEGER NOT NULL,
                 company_tier TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 14`)
+            tx.run(sql`PRAGMA user_version = 14`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 14) {
-            await tx.run(sql`ALTER TABLE ashbyhq_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`ALTER TABLE lever_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`ALTER TABLE greenhouse_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
-            await tx.run(sql`CREATE INDEX ashbyhq_company_tier_idx ON ashbyhq_company(tier)`)
-            await tx.run(sql`CREATE INDEX lever_company_tier_idx ON lever_company(tier)`)
-            await tx.run(sql`CREATE INDEX greenhouse_company_tier_idx ON greenhouse_company(tier)`)
-            await tx.run(sql`CREATE INDEX bamboohr_company_tier_idx ON bamboohr_company(tier)`)
-            await tx.run(sql`PRAGMA user_version = 15`)
+            tx.run(sql`ALTER TABLE ashbyhq_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE lever_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE greenhouse_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE bamboohr_company ADD COLUMN tier INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`CREATE INDEX ashbyhq_company_tier_idx ON ashbyhq_company(tier)`)
+            tx.run(sql`CREATE INDEX lever_company_tier_idx ON lever_company(tier)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_tier_idx ON greenhouse_company(tier)`)
+            tx.run(sql`CREATE INDEX bamboohr_company_tier_idx ON bamboohr_company(tier)`)
+            tx.run(sql`PRAGMA user_version = 15`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 15) {
-            await tx.run(sql`CREATE TABLE greenhouse_job_2 (
+            tx.run(sql`CREATE TABLE greenhouse_job_2 (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
                 info TEXT NOT NULL,
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`
+            tx.run(sql`
                 INSERT INTO greenhouse_job_2(company_name, id, fetched_epoch_ms, info)
                 SELECT company_name, id, fetched_epoch_ms, info FROM greenhouse_job
             `)
-            await tx.run(sql`DROP TABLE greenhouse_job`)
+            tx.run(sql`DROP TABLE greenhouse_job`)
 
-            await tx.run(sql`PRAGMA user_version = 16`)
+            tx.run(sql`PRAGMA user_version = 16`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 16) {
             // outdated (now it filters by tier as well)
-            await tx.run(sql`DROP INDEX ashbyhq_company_exists_checked_idx`)
-            await tx.run(sql`DROP INDEX lever_company_exists_checked_idx`)
-            await tx.run(sql`DROP INDEX greenhouse_company_exists_checked_idx`)
-            await tx.run(sql`DROP INDEX bamboohr_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX ashbyhq_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX lever_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX greenhouse_company_exists_checked_idx`)
+            tx.run(sql`DROP INDEX bamboohr_company_exists_checked_idx`)
             // only needed once at startup, and if it has stats on "exists" cardinality
             // it should be able to use the new index.
-            await tx.run(sql`DROP INDEX ashbyhq_company_tier_idx`)
-            await tx.run(sql`DROP INDEX lever_company_tier_idx`)
-            await tx.run(sql`DROP INDEX greenhouse_company_tier_idx`)
-            await tx.run(sql`DROP INDEX bamboohr_company_tier_idx`)
+            tx.run(sql`DROP INDEX ashbyhq_company_tier_idx`)
+            tx.run(sql`DROP INDEX lever_company_tier_idx`)
+            tx.run(sql`DROP INDEX greenhouse_company_tier_idx`)
+            tx.run(sql`DROP INDEX bamboohr_company_tier_idx`)
 
-            await tx.run(sql`CREATE INDEX ashbyhq_company_exists_tier_checked_idx ON ashbyhq_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`CREATE INDEX lever_company_exists_tier_checked_idx ON lever_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`CREATE INDEX greenhouse_company_exists_tier_checked_idx ON greenhouse_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`CREATE INDEX bamboohr_company_exists_tier_checked_idx ON bamboohr_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX ashbyhq_company_exists_tier_checked_idx ON ashbyhq_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX lever_company_exists_tier_checked_idx ON lever_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_exists_tier_checked_idx ON greenhouse_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX bamboohr_company_exists_tier_checked_idx ON bamboohr_company("exists", tier, checked_epoch_ms)`)
 
-            await tx.run(sql`PRAGMA user_version = 17`)
+            tx.run(sql`PRAGMA user_version = 17`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 17) {
-            await tx.run(sql`CREATE TABLE zohorecruit_company (
+            tx.run(sql`CREATE TABLE zohorecruit_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER,
                 fail_count INTEGER NOT NULL,
                 tier INTEGER NOT NULL
             )`)
-            await tx.run(sql`CREATE TABLE zohorecruit_job (
+            tx.run(sql`CREATE TABLE zohorecruit_job (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
@@ -503,7 +502,7 @@ PRAGMA mmap_size = 268435456;
                 long_info TEXT,
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`CREATE TABLE zohorecruit_fetch_job_details (
+            tx.run(sql`CREATE TABLE zohorecruit_fetch_job_details (
                 unique_id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
@@ -511,54 +510,54 @@ PRAGMA mmap_size = 268435456;
                 job_posted_after INTEGER NOT NULL,
                 company_tier TEXT NOT NULL
             )`)
-            await tx.run(sql`CREATE INDEX zohorecruit_company_exists_tier_checked_idx ON zohorecruit_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 18`)
+            tx.run(sql`CREATE INDEX zohorecruit_company_exists_tier_checked_idx ON zohorecruit_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 18`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 18) {
-            await tx.run(sql`update ashbyhq_company set tier = 0`)
-            await tx.run(sql`update lever_company set tier = 0`)
-            await tx.run(sql`update greenhouse_company set tier = 0`)
-            await tx.run(sql`update bamboohr_company set tier = 0`)
-            await tx.run(sql`update zohorecruit_company set tier = 0`)
-            await tx.run(sql`PRAGMA user_version = 19`)
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 19`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 19) {
-            await tx.run(sql`CREATE TABLE gem_company (
+            tx.run(sql`CREATE TABLE gem_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER,
                 tier INTEGER NOT NULL
             )`)
-            await tx.run(sql`CREATE TABLE gem_job (
+            tx.run(sql`CREATE TABLE gem_job (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
                 info TEXT NOT NULL,
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`CREATE INDEX gem_company_exists_tier_checked_idx ON gem_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 20`)
+            tx.run(sql`CREATE INDEX gem_company_exists_tier_checked_idx ON gem_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 20`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 20) {
-            await tx.run(sql`CREATE TABLE rippling_company (
+            tx.run(sql`CREATE TABLE rippling_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER,
                 tier INTEGER NOT NULL
             )`)
-            await tx.run(sql`CREATE TABLE rippling_job (
+            tx.run(sql`CREATE TABLE rippling_job (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
@@ -566,7 +565,7 @@ PRAGMA mmap_size = 268435456;
                 long_info TEXT,
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`CREATE TABLE rippling_fetch_job_details (
+            tx.run(sql`CREATE TABLE rippling_fetch_job_details (
                 unique_id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
@@ -574,102 +573,102 @@ PRAGMA mmap_size = 268435456;
                 job_posted_after INTEGER NOT NULL,
                 company_tier TEXT NOT NULL
             )`)
-            await tx.run(sql`CREATE INDEX rippling_company_exists_tier_checked_idx ON rippling_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 21`)
+            tx.run(sql`CREATE INDEX rippling_company_exists_tier_checked_idx ON rippling_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 21`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 21) {
-            await tx.run(sql`update ashbyhq_company set tier = 0`)
-            await tx.run(sql`update lever_company set tier = 0`)
-            await tx.run(sql`update greenhouse_company set tier = 0`)
-            await tx.run(sql`update bamboohr_company set tier = 0`)
-            await tx.run(sql`update zohorecruit_company set tier = 0`)
-            await tx.run(sql`update gem_company set tier = 0`)
-            await tx.run(sql`update rippling_company set tier = 0`)
-            await tx.run(sql`PRAGMA user_version = 22`)
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`update gem_company set tier = 0`)
+            tx.run(sql`update rippling_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 22`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 22) {
-            await tx.run(sql`update ashbyhq_company set tier = 0`)
-            await tx.run(sql`update lever_company set tier = 0`)
-            await tx.run(sql`update greenhouse_company set tier = 0`)
-            await tx.run(sql`update bamboohr_company set tier = 0`)
-            await tx.run(sql`update zohorecruit_company set tier = 0`)
-            await tx.run(sql`update gem_company set tier = 0`)
-            await tx.run(sql`update rippling_company set tier = 0`)
-            await tx.run(sql`PRAGMA user_version = 23`)
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`update gem_company set tier = 0`)
+            tx.run(sql`update rippling_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 23`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 23) {
-            await tx.run(sql`update ashbyhq_company set tier = 0`)
-            await tx.run(sql`update lever_company set tier = 0`)
-            await tx.run(sql`update greenhouse_company set tier = 0`)
-            await tx.run(sql`update bamboohr_company set tier = 0`)
-            await tx.run(sql`update zohorecruit_company set tier = 0`)
-            await tx.run(sql`update gem_company set tier = 0`)
-            await tx.run(sql`update rippling_company set tier = 0`)
-            await tx.run(sql`PRAGMA user_version = 24`)
+            tx.run(sql`update ashbyhq_company set tier = 0`)
+            tx.run(sql`update lever_company set tier = 0`)
+            tx.run(sql`update greenhouse_company set tier = 0`)
+            tx.run(sql`update bamboohr_company set tier = 0`)
+            tx.run(sql`update zohorecruit_company set tier = 0`)
+            tx.run(sql`update gem_company set tier = 0`)
+            tx.run(sql`update rippling_company set tier = 0`)
+            tx.run(sql`PRAGMA user_version = 24`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 24) {
-            await tx.run(sql`CREATE TABLE location_classification (
+            tx.run(sql`CREATE TABLE location_classification (
                 location TEXT PRIMARY KEY,
                 is_in_us TEXT NOT NULL
             )`)
-            await tx.run(sql`CREATE TABLE generation_response (
+            tx.run(sql`CREATE TABLE generation_response (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 input TEXT NOT NULL,
                 generation TEXT NOT NULL
             )`)
-            await tx.run(sql`PRAGMA user_version = 25`)
+            tx.run(sql`PRAGMA user_version = 25`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 25) {
-            await tx.run(sql`ALTER TABLE ashbyhq_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE lever_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE greenhouse_job_2 ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE zohorecruit_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE gem_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`ALTER TABLE rippling_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
-            await tx.run(sql`PRAGMA user_version = 26`)
+            tx.run(sql`ALTER TABLE ashbyhq_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE lever_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE greenhouse_job_2 ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE bamboohr_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE zohorecruit_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE gem_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`ALTER TABLE rippling_job ADD COLUMN relevancy TEXT NOT NULL DEFAULT '{}'`)
+            tx.run(sql`PRAGMA user_version = 26`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 26) {
-            await tx.run(sql`CREATE INDEX location_classification_is_in_us_empty ON location_classification(is_in_us) where is_in_us = ''`)
-            await tx.run(sql`PRAGMA user_version = 27`)
+            tx.run(sql`CREATE INDEX location_classification_is_in_us_empty ON location_classification(is_in_us) where is_in_us = ''`)
+            tx.run(sql`PRAGMA user_version = 27`)
         }
     })
 
-    await db.transaction(async(tx) => {
-        const version = await dbVersion(tx)
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
         if (version === 27) {
-            await tx.run(sql`CREATE TABLE applytojob_company (
+            tx.run(sql`CREATE TABLE applytojob_company (
                 name TEXT PRIMARY KEY,
                 checked_epoch_ms INTEGER,
                 "exists" INTEGER,
                 fail_count INTEGER NOT NULL,
                 tier INTEGER NOT NULL
             )`)
-            await tx.run(sql`CREATE TABLE applytojob_job (
+            tx.run(sql`CREATE TABLE applytojob_job (
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
                 fetched_epoch_ms INTEGER NOT NULL,
@@ -678,7 +677,7 @@ PRAGMA mmap_size = 268435456;
                 relevancy TEXT NOT NULL DEFAULT '{}',
                 PRIMARY KEY(company_name, id)
             )`)
-            await tx.run(sql`CREATE TABLE applytojob_fetch_job_details (
+            tx.run(sql`CREATE TABLE applytojob_fetch_job_details (
                 unique_id TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 id TEXT NOT NULL,
@@ -686,99 +685,14 @@ PRAGMA mmap_size = 268435456;
                 job_posted_after INTEGER NOT NULL,
                 company_tier TEXT NOT NULL
             )`)
-            await tx.run(sql`CREATE INDEX applytojob_company_exists_tier_checked_idx ON applytojob_company("exists", tier, checked_epoch_ms)`)
-            await tx.run(sql`PRAGMA user_version = 28`)
+            tx.run(sql`CREATE INDEX applytojob_company_exists_tier_checked_idx ON applytojob_company("exists", tier, checked_epoch_ms)`)
+            tx.run(sql`PRAGMA user_version = 28`)
         }
     })
+
 }
 
 
-async function dbVersion(db: Database | Transaction) {
-    return (await db.get(sql`PRAGMA user_version`) as { user_version: number }).user_version
-}
-
-class Mutex {
-    private tail: Promise<void> = Promise.resolve()
-
-    async lock(): Promise<() => void> {
-        const { promise: gate, resolve: release } = Promise.withResolvers<void>()
-        const prev = this.tail
-        this.tail = this.tail.then(() => gate)
-        await prev
-        return release
-    }
-}
-
-// Libsql fails on mulltiple writes happeining in parallel.
-// We wrap the client so every execute/batch and the whole span of each interactive
-// transaction runs under a single mutex. The slow part (network fetches) stays outside the lock.
-export function serializeClient(client: Client): Client {
-    const mutex = new Mutex()
-
-    const lockAround = (fn: (...args: any[]) => Promise<unknown>) =>
-        async(...args: any[]) => {
-            const release = await mutex.lock()
-            try {
-                return await fn(...args)
-            }
-            finally {
-                release()
-            }
-        }
-
-    return new Proxy(client, {
-        get(target, prop, receiver) {
-            const value = Reflect.get(target, prop, receiver)
-
-            if(prop === 'execute' || prop === 'batch' || prop === 'executeMultiple' || prop === 'migrate') {
-                return lockAround((value as (...a: any[]) => Promise<unknown>).bind(target))
-            }
-
-            if(prop === 'transaction') {
-                return async(...args: any[]) => {
-                    const release = await mutex.lock()
-                    let tx
-                    try {
-                        tx = await (value as (...a: any[]) => Promise<any>)
-                            .apply(target, args)
-                    }
-                    catch(err) {
-                        release()
-                        throw err
-                    }
-
-                    let released = false
-                    const releaseOnce = () => {
-                        if(released) return
-                        released = true
-                        release()
-                    }
-
-                    // The transaction owns the lock for its whole lifetime;
-                    // its own statements run through `tx` (no re-locking), and
-                    // the lock is handed back only on commit/rollback/close.
-                    return new Proxy(tx, {
-                        get(t, p, r) {
-                            const v = Reflect.get(t, p, r)
-                            if(p === 'commit' || p === 'rollback' || p === 'close') {
-                                return async(...a: any[]) => {
-                                    try {
-                                        return await (v as (...x: any[]) => Promise<unknown>).apply(t, a)
-                                    }
-                                    finally {
-                                        releaseOnce()
-                                    }
-                                }
-                            }
-                            if(typeof v === 'function') return (v as (...x: any[]) => unknown).bind(t)
-                            return v
-                        },
-                    })
-                }
-            }
-
-            if(typeof value === 'function') return (value as (...a: any[]) => unknown).bind(target)
-            return value
-        },
-    })
+function dbVersion(db: BetterSQLite3Database | SQLiteTransaction<"sync", Database.RunResult, Record<string, never>, never>) {
+    return (db.get(sql`PRAGMA user_version`) as { user_version: number }).user_version
 }

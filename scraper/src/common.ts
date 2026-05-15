@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises'
 import * as D from 'drizzle-orm'
+import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as htmlparser2 from 'htmlparser2'
 import { OpenRouter } from '@openrouter/sdk'
 
@@ -80,27 +81,27 @@ async function trySendMessage(log: L.Log, message: string): Promise<boolean> {
     }
 }
 
-export async function sendMessage(log: L.Log, db: Db.Database, message: string) {
+export async function sendMessage(log: L.Log, db: BetterSQLite3Database, message: string) {
     const originalEpochMs = Date.now()
     const ok = await trySendMessage(log, message)
     if(!ok) {
-        await db.insert(Db.pendingNotification).values({ message, originalEpochMs }).run()
+        db.insert(Db.pendingNotification).values({ message, originalEpochMs }).run()
         log.I('Persisted notification for retry')
     }
 }
 
-export async function runPendingNotificationService(db: Db.Database, log: L.Log) {
+export async function runPendingNotificationService(db: BetterSQLite3Database, log: L.Log) {
     while(true) {
         await U.delay(T.Now.instant().add({ seconds: 10 }))
 
-        const rows = await db.select().from(Db.pendingNotification).all()
+        const rows = db.select().from(Db.pendingNotification).all()
         for(const row of rows) {
             const suffix = '\n' + `Delayed by: ${millisecToDurationString(Date.now() - row.originalEpochMs)}`
             const ok = await trySendMessage(log.addedCtx('retry ', [row.id]), row.message + suffix)
             if(!ok) continue
 
             try {
-                await db.delete(Db.pendingNotification).where(D.eq(Db.pendingNotification.id, row.id)).run()
+                db.delete(Db.pendingNotification).where(D.eq(Db.pendingNotification.id, row.id)).run()
             }
             catch(err) {
                 log.E('Failed to delete pending notification ', [row.id], ': ', [err])
@@ -109,9 +110,9 @@ export async function runPendingNotificationService(db: Db.Database, log: L.Log)
     }
 }
 
-export async function runLocationClassificationService(db: Db.Database, log: L.Log) {
+export async function runLocationClassificationService(db: BetterSQLite3Database, log: L.Log) {
     while(true) {
-        const row = await db.select().from(Db.locationClassification)
+        const row = db.select().from(Db.locationClassification)
             .where(D.eq(Db.locationClassification.isInUs, ''))
             .limit(1)
             .get()
@@ -138,7 +139,7 @@ export class SampleSaver {
     private samplers: Sampler[] = []
 
     constructor() {
-        void(this.run())
+        this.run()
     }
 
     createSampler(name: string): Sampler {
@@ -185,34 +186,34 @@ export const bannedCompanies = [
     'g2i',
 ]
 
-export async function evaluateCompanyTier<J extends { companyName: string }>(
-    db: Db.Database,
+export function evaluateCompanyTier<J extends { companyName: string }>(
+    db: BetterSQLite3Database,
     jobs: J[],
-    calculateTier: (db: Db.Database, job: J) => Promise<number>,
+    calculateTier: (db: BetterSQLite3Database, job: J) => number,
 ) {
     let companyTier = 3
     for(const job of jobs) {
-        const tier = await calculateTier(db, job)
+        const tier = calculateTier(db, job)
         companyTier = Math.min(companyTier, tier)
         if(companyTier === 1) break
     }
     return companyTier
 }
 
-export async function initTierEvaluation<J extends { companyName: string }>(
+export function initTierEvaluation<J extends { companyName: string }>(
     log: L.Log,
-    db: Db.Database,
+    db: BetterSQLite3Database,
     Company: any,
     Job: any,
-    calculateTier: (db: Db.Database, job: J) => Promise<number>,
+    calculateTier: (db: BetterSQLite3Database, job: J) => number,
 ) {
-    const evaluateTiers = async() => {
-        const companies = await db.select({ name: Company.name }).from(Company).all() as { name: string }[]
+    const evaluateTiers = () => {
+        const companies = db.select({ name: Company.name }).from(Company).all() as { name: string }[]
         log.I('Recalculating tier for ', [companies.length], ' companies')
 
         const tiersByCompany = new Map<string, number>()
         for(let lastRowid = 0;;) {
-            const chunk = await db.select({
+            const chunk = db.select({
                 ...D.getTableColumns(Job),
                 rowid: D.sql<number>`rowid`,
             })
@@ -226,7 +227,7 @@ export async function initTierEvaluation<J extends { companyName: string }>(
                 const companyTier = tiersByCompany.get(row.companyName) ?? 3
                 if(companyTier === 1) continue
 
-                const tier = await calculateTier(db, row)
+                const tier = calculateTier(db, row)
                 tiersByCompany.set(row.companyName, Math.min(companyTier, tier))
             }
 
@@ -239,10 +240,10 @@ export async function initTierEvaluation<J extends { companyName: string }>(
             tiers.get(tiersByCompany.get(company.name) ?? 3)!.push(company.name)
         }
 
-        await db.transaction(async(tx) => {
+        db.transaction(tx => {
             for(const [tier, companies] of tiers) {
                 if(companies.length > 0) {
-                    await tx.update(Company).set({ tier }).where(D.inArray(Company.name, companies)).run()
+                    tx.update(Company).set({ tier }).where(D.inArray(Company.name, companies)).run()
                 }
             }
         })
@@ -262,12 +263,12 @@ export async function initTierEvaluation<J extends { companyName: string }>(
         // Schedule reevaluation since LLM might've classified some locations and
         // jobs that were relevant before are now not relevant.
         setTimeout(
-            () => void(evaluateTiers()),
+            () => evaluateTiers(),
             nextCheckZdt.toInstant().since(now).total('milliseconds'),
         )
     }
 
-    await evaluateTiers()
+    evaluateTiers()
 }
 
 export function getOvernightInfo() {
@@ -289,26 +290,26 @@ export function getOvernightInfo() {
     }
 }
 
-const typescript1 = <T extends AnyCompanyTable>(db: Db.Database, Company: T) => db.select().from(Company).all()
+const typescript1 = <T extends AnyCompanyTable>(db: BetterSQLite3Database, Company: T) => db.select().from(Company).all()
 type GetCompaniesToCheckReturn<T extends AnyCompanyTable> = {
-    missing: Awaited<ReturnType<typeof typescript1<T>>>
-    desired: Awaited<ReturnType<typeof typescript1<T>>>
-    relevant: Awaited<ReturnType<typeof typescript1<T>>>
-    other: Awaited<ReturnType<typeof typescript1<T>>>
+    missing: ReturnType<typeof typescript1<T>>
+    desired: ReturnType<typeof typescript1<T>>
+    relevant: ReturnType<typeof typescript1<T>>
+    other: ReturnType<typeof typescript1<T>>
 }
 
-export async function getCompaniesToCheck<T extends AnyCompanyTable>(
-    db: Db.Database,
+export function getCompaniesToCheck<T extends AnyCompanyTable>(
+    db: BetterSQLite3Database,
     Company: T,
     companiesToSkip: string[],
     options?: { quota?: number, weights?: [number, number] }
-): Promise<GetCompaniesToCheckReturn<T>> {
+): GetCompaniesToCheckReturn<T> {
     const quota = options?.quota ?? 5
     const weights = options?.weights ?? [0.5, 0.25]
 
     const overnightInfo = getOvernightInfo()
     if(overnightInfo.isOvernight) {
-        const other = await db.select().from(Company)
+        const other = db.select().from(Company)
             .where(D.and(
                 D.eq(Company.exists, 1),
                 D.eq(Company.tier, 3),
@@ -328,34 +329,33 @@ export async function getCompaniesToCheck<T extends AnyCompanyTable>(
         }
     }
 
-    const [missing, desired, relevant] = await Promise.all([
-        db.select().from(Company)
-            .where(D.and(
-                D.isNull(Company.exists),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all(),
-        db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 1),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all(),
-        db.select().from(Company)
-            .where(D.and(
-                D.eq(Company.exists, 1),
-                D.eq(Company.tier, 2),
-                D.not(D.inArray(Company.name, companiesToSkip)),
-            ))
-            .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
-            .limit(quota)
-            .all()
-    ])
+    const missing = db.select().from(Company)
+        .where(D.and(
+            D.isNull(Company.exists),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
+
+    const desired = db.select().from(Company)
+        .where(D.and(
+            D.eq(Company.exists, 1),
+            D.eq(Company.tier, 1),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
+    const relevant = db.select().from(Company)
+        .where(D.and(
+            D.eq(Company.exists, 1),
+            D.eq(Company.tier, 2),
+            D.not(D.inArray(Company.name, companiesToSkip)),
+        ))
+        .orderBy(D.sql`${Company.checkedEpochMs} ASC NULLS FIRST`)
+        .limit(quota)
+        .all()
 
     const tiersCounts = selectCompanies([desired, relevant], weights, quota - missing.length)
     desired.length = tiersCounts[0]
@@ -369,9 +369,9 @@ export async function getCompaniesToCheck<T extends AnyCompanyTable>(
     }
 }
 
-export async function populateCompanies<T extends AnyCompanyTable>(
+export function populateCompanies<T extends AnyCompanyTable>(
     log: L.Log,
-    db: Db.Database,
+    db: BetterSQLite3Database,
     Company: T,
     companyNames: string[],
     // NOTE: typescript language server goes crazy if this is insert model
@@ -381,7 +381,7 @@ export async function populateCompanies<T extends AnyCompanyTable>(
     for(let i = 0; i < companyNames.length; i += 3000) {
         const toInsert = companyNames.slice(i, i + 3000).map(it => ({ ...baseCompanyRecord, name: it }))
 
-        await db.insert(Company)
+        db.insert(Company)
             .values(toInsert as any)
             .onConflictDoNothing()
             .execute()
@@ -449,15 +449,14 @@ export function parseHtml(html: string) {
     return result
 }
 
-export async function isLocationInUs(db: Db.Database, location: string) {
-    const isInUs = (
-        await db.select().from(Db.locationClassification)
-            .where(D.eq(Db.locationClassification.location, location))
-            .get()
-    )?.isInUs
+export function isLocationInUs(db: BetterSQLite3Database, location: string) {
+    const isInUs = db.select().from(Db.locationClassification)
+        .where(D.eq(Db.locationClassification.location, location))
+        .get()
+        ?.isInUs
 
     if(isInUs === undefined) {
-        await db.insert(Db.locationClassification).values({ location, isInUs: '' }).onConflictDoNothing().run()
+        db.insert(Db.locationClassification).values({ location, isInUs: '' }).onConflictDoNothing().run()
         return true
     }
 
@@ -465,12 +464,11 @@ export async function isLocationInUs(db: Db.Database, location: string) {
 }
 
 const currentlyClassifying = new Map<string, Promise<string>>()
-export async function isLocationInUsFull(parentLog: L.Log, db: Db.Database, location: string) {
-    let isInUs = (
-        await db.select().from(Db.locationClassification)
-            .where(D.eq(Db.locationClassification.location, location))
-            .get()
-    )?.isInUs
+export async function isLocationInUsFull(parentLog: L.Log, db: BetterSQLite3Database, location: string) {
+    let isInUs = db.select().from(Db.locationClassification)
+        .where(D.eq(Db.locationClassification.location, location))
+        .get()
+        ?.isInUs
 
     if(isInUs === undefined || isInUs === '') {
         let classifyTask = currentlyClassifying.get(location)
@@ -498,7 +496,7 @@ export async function isLocationInUsFull(parentLog: L.Log, db: Db.Database, loca
     return isInUs !== '0'
 }
 
-async function classifyLocationInner(log: L.Log, db: Db.Database, location: string) {
+async function classifyLocationInner(log: L.Log, db: BetterSQLite3Database, location: string) {
     const openrouter = new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY! })
     const generation = await openrouter.chat.send({
         chatRequest: {
@@ -524,7 +522,7 @@ async function classifyLocationInner(log: L.Log, db: Db.Database, location: stri
         }
     })
     log.I('Received generation', [[' ', [generation]], 'extra-details'])
-    const result = await db.insert(Db.generationResponse)
+    const result = db.insert(Db.generationResponse)
         .values({ input: JSON.stringify({ v: 1, t: 'classifyLocation', location }), generation: JSON.stringify(generation) })
         .returning({ id: Db.generationResponse.id })
         .get()
@@ -536,7 +534,7 @@ async function classifyLocationInner(log: L.Log, db: Db.Database, location: stri
         isInUs = '?'
     }
 
-    await db.insert(Db.locationClassification)
+    db.insert(Db.locationClassification)
         .values({ location, isInUs })
         .onConflictDoUpdate({
             target: Db.locationClassification.location,

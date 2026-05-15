@@ -64,6 +64,7 @@ export async function all<T extends readonly unknown[] | []>(
   values: T,
 ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
   await Promise.allSettled(values);
+  // eslint-disable-next-line local/no-promise-all
   return await Promise.all(values);
 }
 
