@@ -5,7 +5,7 @@ import * as D from 'drizzle-orm'
 
 import * as Db from './lib/db.ts'
 import * as T from './lib/temporal.ts'
-import * as C from './common.ts'
+import * as C from './lib/common.ts'
 import * as Rippling from './boards/rippling.ts'
 
 type CompanyParams = {

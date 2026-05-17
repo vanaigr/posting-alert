@@ -8,7 +8,7 @@ import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
-import * as C from '../common.ts'
+import * as C from '../lib/common.ts'
 
 // Scraper info from: https://github.com/kalil0321/ats-scrapers/blob/main/src/jobhive/scrapers/jazzhr.py
 

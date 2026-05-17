@@ -4,11 +4,11 @@ import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as htmlparser2 from 'htmlparser2'
 import { OpenRouter } from '@openrouter/sdk'
 
-import * as L from './lib/log.ts'
-import * as U from './lib/util.ts'
-import * as T from './lib/temporal.ts'
-import * as N from './lib/network.ts'
-import * as Db from './lib/db.ts'
+import * as L from './log.ts'
+import * as U from './util.ts'
+import * as T from './temporal.ts'
+import * as N from './network.ts'
+import * as Db from './db.ts'
 
 type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<V> : never : never
 

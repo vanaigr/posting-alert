@@ -7,7 +7,7 @@ import * as L from '../lib/log.ts'
 import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
-import * as C from '../common.ts'
+import * as C from '../lib/common.ts'
 
 const { zohorecruitCompany: Company, zohorecruitJob: Job, zohorecruitFetchJobDetails: FetchJobDetails } = Db
 

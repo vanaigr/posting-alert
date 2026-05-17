@@ -7,7 +7,7 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as N from '../lib/network.ts'
-import * as C from '../common.ts'
+import * as C from '../lib/common.ts'
 
 const { ripplingCompany: Company, ripplingJob: Job, ripplingFetchJobDetails: FetchJobDetails } = Db
 

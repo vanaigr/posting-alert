@@ -2,7 +2,7 @@ import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import * as L from '../lib/log.ts'
 import * as U from '../lib/util.ts'
-import * as C from '../common.ts'
+import * as C from '../lib/common.ts'
 
 import cities from './cities.json' with { type: 'json' }
 import states from './states.json' with { type: 'json' }

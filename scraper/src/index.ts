@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 
 import * as Db from './lib/db.ts'
 import * as L from './lib/log.ts'
-import * as C from './common.ts'
+import * as C from './lib/common.ts'
 import * as Ashbyhq from './boards/ashbyhq.ts'
 import * as Lever from './boards/lever.ts'
 import * as Greenhouse from './boards/greenhouse.ts'
