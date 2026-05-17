@@ -31,7 +31,7 @@ export const citiesStatesRegex3 = new RegExp(
     'i'
 )
 
-const titleRegex = /(engineer|developer|programmer)/i
+const titleRegex = /(engineer|developer|programmer|\beng\b|member of technical staff|\bswe\b)/i
 export function isJobRelevant(title: string) {
     return titleRegex.test(title)
         && !(
