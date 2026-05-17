@@ -721,6 +721,33 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`PRAGMA user_version = 29`)
         }
     })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 29) {
+            // We don't to index "exists" since for tier 1 and 2 companies always exist, and if they start
+            // returning errors, they're demoted to tier 3, and tier 3 is queried regardless of "exists".
+            tx.run(sql`DROP INDEX ashbyhq_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX lever_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX greenhouse_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX bamboohr_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX zohorecruit_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX gem_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX rippling_company_exists_tier_checked_idx`)
+            tx.run(sql`DROP INDEX applytojob_company_exists_tier_checked_idx`)
+
+            tx.run(sql`CREATE INDEX ashbyhq_company_tier_checked_idx ON ashbyhq_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX lever_company_tier_checked_idx ON lever_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX greenhouse_company_tier_checked_idx ON greenhouse_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX bamboohr_company_tier_checked_idx ON bamboohr_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX zohorecruit_company_tier_checked_idx ON zohorecruit_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX gem_company_tier_checked_idx ON gem_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX rippling_company_tier_checked_idx ON rippling_company(tier, checked_epoch_ms)`)
+            tx.run(sql`CREATE INDEX applytojob_company_tier_checked_idx ON applytojob_company(tier, checked_epoch_ms)`)
+
+            tx.run(sql`PRAGMA user_version = 30`)
+        }
+    })
 }
 
 

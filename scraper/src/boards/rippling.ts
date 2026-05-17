@@ -117,7 +117,7 @@ async function checkCompany(
         log.I('Company does not exist')
 
         db.update(Company)
-            .set({ exists: 0 })
+            .set({ exists: 0, tier: 3 })
             .where(D.eq(Company.name, company.name))
             .run()
         return U.status('ok')
@@ -193,7 +193,7 @@ async function checkCompany(
         }
     }
 
-    const newTier = toInsert.length > 0
+    const newTier = toInsert.length > 0 || !company.exists
         ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 

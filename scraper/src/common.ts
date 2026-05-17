@@ -313,7 +313,7 @@ export function getCompaniesToCheck<T extends AnyCompanyTable>(
     if(overnightInfo.isOvernight) {
         const other = db.select().from(Company)
             .where(D.and(
-                D.eq(Company.exists, 1),
+                // NOTE: also includes nonexistent companies
                 D.eq(Company.tier, 3),
                 D.not(D.inArray(Company.name, companiesToSkip)),
             ))
@@ -342,7 +342,6 @@ export function getCompaniesToCheck<T extends AnyCompanyTable>(
 
     const desired = db.select().from(Company)
         .where(D.and(
-            D.eq(Company.exists, 1),
             D.eq(Company.tier, 1),
             D.not(D.inArray(Company.name, companiesToSkip)),
         ))
@@ -351,7 +350,6 @@ export function getCompaniesToCheck<T extends AnyCompanyTable>(
         .all()
     const relevant = db.select().from(Company)
         .where(D.and(
-            D.eq(Company.exists, 1),
             D.eq(Company.tier, 2),
             D.not(D.inArray(Company.name, companiesToSkip)),
         ))

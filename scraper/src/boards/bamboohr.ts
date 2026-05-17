@@ -121,7 +121,7 @@ async function checkCompany(
         log.I('Company does not exist')
 
         db.update(Company)
-            .set({ exists: 0, failCount: 0 })
+            .set({ exists: 0, tier: 3 })
             .where(D.eq(Company.name, company.name))
             .run()
         return U.status('ok')
@@ -132,7 +132,7 @@ async function checkCompany(
         if(newFailCount >= 10 && company.exists === null) {
             log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
             db.update(Company)
-                .set({ exists: 0, failCount: newFailCount })
+                .set({ exists: 0, tier: 3, failCount: newFailCount })
                 .where(D.eq(Company.name, company.name))
                 .run()
         }
@@ -191,13 +191,13 @@ async function checkCompany(
         }
     }
 
-    const newTier = toInsert.length > 0
+    const newTier = toInsert.length > 0 || !company.exists
         ? C.evaluateCompanyTier(db, [...existingJobsRows, ...toInsert], calculateTier)
         : null
 
     db.transaction(db => {
         db.update(Company)
-            .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
+            .set({ exists: 1, failCount: 0, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
