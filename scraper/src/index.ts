@@ -15,6 +15,7 @@ import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
 import * as Applytojob from './boards/applytojob.ts'
 import * as Smartrecruiters from './boards/smartrecruiters.ts'
+import * as Icims from './boards/icims.ts'
 
 let mainLog: L.Log | undefined
 
@@ -49,6 +50,7 @@ async function main() {
         Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
         Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
         Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
+        Icims.run(db, mainLog.addedCtx('icims'), sampleSaver),
     ])
 
     mainLog.W('A sub-task exited. Restarting')
