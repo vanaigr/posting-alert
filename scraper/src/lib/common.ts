@@ -210,7 +210,7 @@ export function initTierEvaluation<J extends AnyJobTable>(
     calculateTier: (db: BetterSQLite3Database, job: D.InferSelectModel<J>) => number,
 ) {
     const evaluateTiers = () => {
-        const companies = db.select({ name: Company.name }).from(Company).all() as { name: string }[]
+        const companies = db.select({ name: Company.name }).from(Company).where(D.eq(Company.exists, 1)).all() as { name: string }[]
         log.I('Recalculating tier for ', [companies.length], ' companies')
 
         const tiersByCompany = new Map<string, number>()
