@@ -554,7 +554,7 @@ export function updateFailCount<
     company: InferTable<C>,
 ) {
     const newFailCount = company.failCount + 1
-    if(newFailCount >= 10 && company.exists === null) {
+    if(newFailCount >= 10) {
         log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
         db.update(Company)
             .set({ exists: 0, tier: 3, failCount: newFailCount } as any)
