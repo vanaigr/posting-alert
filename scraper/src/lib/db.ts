@@ -9,8 +9,8 @@ export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
-    tier: integer('tier').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
 })
 
 export const aJob = sqliteTable('ashbyhq_job', {
@@ -39,8 +39,8 @@ export const lCompany = sqliteTable('lever_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
-    tier: integer('tier').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
 })
 
 export const lJob = sqliteTable('lever_job', {
@@ -56,8 +56,8 @@ export const gCompany = sqliteTable('greenhouse_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
-    tier: integer('tier').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
 })
 
 export const gJob = sqliteTable('greenhouse_job_2', {
@@ -73,8 +73,8 @@ export const bamboohrCompany = sqliteTable('bamboohr_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
-    tier: integer('tier').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
 })
 
 export const bamboohrJob = sqliteTable(
@@ -139,7 +139,7 @@ export const gemCompany = sqliteTable('gem_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
     tier: integer('tier').notNull(),
 })
 
@@ -162,7 +162,7 @@ export const ripplingCompany = sqliteTable('rippling_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
-    failCount: integer('fail_count').notNull().default(0),
+    failCount: integer('fail_count').notNull(),
     tier: integer('tier').notNull(),
 })
 
