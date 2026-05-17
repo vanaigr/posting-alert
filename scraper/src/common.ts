@@ -544,3 +544,27 @@ async function classifyLocationInner(log: L.Log, db: BetterSQLite3Database, loca
 
     return isInUs
 }
+
+export function updateFailCount<
+    C extends AnyCompanyTable,
+>(
+    log: L.Log,
+    db: BetterSQLite3Database,
+    Company: C,
+    company: InferTable<C>,
+) {
+    const newFailCount = company.failCount + 1
+    if(newFailCount >= 10 && company.exists === null) {
+        log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
+        db.update(Company)
+            .set({ exists: 0, tier: 3, failCount: newFailCount } as any)
+            .where(D.eq(Company.name, company.name))
+            .run()
+    }
+    else {
+        db.update(Company)
+            .set({ failCount: newFailCount } as any)
+            .where(D.eq(Company.name, company.name))
+            .run()
+    }
+}

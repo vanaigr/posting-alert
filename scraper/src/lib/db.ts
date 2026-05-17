@@ -9,6 +9,7 @@ export const aCompany = sqliteTable('ashbyhq_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
     tier: integer('tier').notNull().default(0),
 })
 
@@ -38,6 +39,7 @@ export const lCompany = sqliteTable('lever_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
     tier: integer('tier').notNull().default(0),
 })
 
@@ -54,6 +56,7 @@ export const gCompany = sqliteTable('greenhouse_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
     tier: integer('tier').notNull().default(0),
 })
 
@@ -136,6 +139,7 @@ export const gemCompany = sqliteTable('gem_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
     tier: integer('tier').notNull(),
 })
 
@@ -158,6 +162,7 @@ export const ripplingCompany = sqliteTable('rippling_company', {
     name: text('name').primaryKey(),
     checkedEpochMs: integer('checked_epoch_ms'),
     exists: integer('exists'),
+    failCount: integer('fail_count').notNull().default(0),
     tier: integer('tier').notNull(),
 })
 
@@ -746,6 +751,18 @@ PRAGMA mmap_size = 268435456;
             tx.run(sql`CREATE INDEX applytojob_company_tier_checked_idx ON applytojob_company(tier, checked_epoch_ms)`)
 
             tx.run(sql`PRAGMA user_version = 30`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 30) {
+            tx.run(sql`ALTER TABLE ashbyhq_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE lever_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE greenhouse_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE gem_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`ALTER TABLE rippling_company ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`)
+            tx.run(sql`PRAGMA user_version = 31`)
         }
     })
 }

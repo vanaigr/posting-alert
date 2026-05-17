@@ -14,7 +14,7 @@ const { aCompany: Company, aJob: Job, aFetchJobDetails: FetchJobDetails } = Db
 export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
     const sampler = sampleSaver.createSampler('ashbyhq')
     await import('../sources/ashbyhq/companyNames.json', { with: { type: 'json' } }).then(it => {
-        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, failCount: 0, tier: 0 })
     })
     C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
@@ -95,7 +95,12 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
                         .run()
                 }
 
-                if(result.status !== 'ok') return
+                if(result.status !== 'ok') {
+                    for(const company of companiesToCheck) {
+                        C.updateFailCount(mainLog.addedCtx(company.name), db, Company, company)
+                    }
+                    return
+                }
 
                 const promises: Promise<unknown>[] = []
 
@@ -222,7 +227,7 @@ async function checkCompany(
 
     db.transaction(db => {
         db.update(Company)
-            .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
+            .set({ exists: 1, failCount: 0, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {

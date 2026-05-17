@@ -133,20 +133,7 @@ async function checkCompany(
     }
 
     if(result.status !== 'ok') {
-        const newFailCount = company.failCount + 1
-        if(newFailCount >= 10 && company.exists === null) {
-            log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
-            db.update(Company)
-                .set({ exists: 0, tier: 3, failCount: newFailCount })
-                .where(D.eq(Company.name, company.name))
-                .run()
-        }
-        else {
-            db.update(Company)
-                .set({ failCount: newFailCount })
-                .where(D.eq(Company.name, company.name))
-                .run()
-        }
+        C.updateFailCount(log, db, Company, company)
         return U.status('ok')
     }
 

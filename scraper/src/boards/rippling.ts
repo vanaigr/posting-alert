@@ -14,7 +14,7 @@ const { ripplingCompany: Company, ripplingJob: Job, ripplingFetchJobDetails: Fet
 export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
     const sampler = sampleSaver.createSampler('rippling')
     await import('../sources/rippling/companyNames.json', { with: { type: 'json' } }).then(it => {
-        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, tier: 0 })
+        C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, failCount: 0, tier: 0 })
     })
     C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
@@ -123,7 +123,10 @@ async function checkCompany(
         return U.status('ok')
     }
 
-    if(result.status !== 'ok') return U.status('ok')
+    if(result.status !== 'ok') {
+        C.updateFailCount(log, db, Company, company)
+        return U.status('ok')
+    }
 
     const initial = company.exists === null
 
@@ -199,7 +202,7 @@ async function checkCompany(
 
     db.transaction(db => {
         db.update(Company)
-            .set({ exists: 1, ...(newTier !== null ? { tier: newTier } : {}) })
+            .set({ exists: 1, failCount: 0, ...(newTier !== null ? { tier: newTier } : {}) })
             .where(D.eq(Company.name, company.name))
             .run()
         if(toInsert.length > 0) {
