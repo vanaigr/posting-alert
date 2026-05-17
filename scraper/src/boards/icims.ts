@@ -49,7 +49,9 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies])
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], {
+            quota: 1
+        })
 
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
@@ -365,7 +367,15 @@ async function request(log0: L.Log, connection: Dispatcher | undefined, url: str
         const log = t === 0 ? log0 : log0.addedCtx('try ', [t])
 
         try {
-            const response = await undiciFetch(url, { dispatcher: connection })
+            const response = await undiciFetch(url, {
+                dispatcher: connection,
+                headers: {
+                    "User-Agent": "Mozilla/5.0",
+                    Accept: 'text/html',
+                    cookie: 'JSESSIONID=52CC06587858D150719A333D72BB6355',
+                }
+            })
+
             if(response.status === 429) {
                 log.E('Rate limited')
                 await response.text().catch(() => {})
@@ -460,6 +470,8 @@ function extractJobs(log: L.Log, html: string): RawJob[] | undefined {
 
     const marker = 'var jobImpressions ='
     for(const script of scripts) {
+        //console.log(script)
+
         const mi = script.indexOf(marker)
         if(mi === -1) continue
 

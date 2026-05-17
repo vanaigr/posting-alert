@@ -28,12 +28,13 @@ function addUrl(url: string) {
 }
 
 const rl = readline.createInterface({
-    input: fs.createReadStream(path.join(import.meta.dirname, 'archive-urls.txt')),
+    input: fs.createReadStream(path.join(import.meta.dirname, 'icims.csv')),
     crlfDelay: Infinity,
 })
 
-for await (const url of rl) {
-    addUrl(url)
+for await (const line of rl) {
+    if(line === 'name,slug,url') continue
+    addUrl(line.substring(line.indexOf(',', line.indexOf(',') + 1) + 1))
 }
 
 console.log('Found', companies.size, 'companies')
