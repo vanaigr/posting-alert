@@ -151,3 +151,9 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
 
     return false
 }
+
+export const bannedCompanies = [
+    'jobgether',
+    'g2i',
+    'brightvisiontechnologies',
+]

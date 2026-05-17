@@ -36,7 +36,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], { quota: 2 })
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], { quota: 2 })
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)
             .innerJoin(Job, D.and(D.eq(FetchJobDetails.companyName, Job.companyName), D.eq(FetchJobDetails.id, Job.id)))

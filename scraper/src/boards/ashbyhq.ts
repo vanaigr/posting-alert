@@ -37,7 +37,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies], { weights: [0.5, 0.1] })
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], { weights: [0.5, 0.1] })
 
         const jobsToCheckDetails = db.select()
             .from(FetchJobDetails)

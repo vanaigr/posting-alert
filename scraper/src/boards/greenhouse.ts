@@ -36,7 +36,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
-        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...C.bannedCompanies])
+        const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies])
 
         mainLog.I(
             'Checking: ',
@@ -285,3 +285,148 @@ function parseJobContent(content: string) {
 
     return C.parseHtml(html)
 }
+
+class KeywordFinder {
+    minCount: number
+    smoothing: number
+    relCounts: Map<string, number>
+    irrCounts: Map<string, number>
+    nRel: number
+    nIrr: number
+
+  constructor({ minCount = 3, smoothing = 1 } = {}) {
+    this.minCount = minCount;
+    this.smoothing = smoothing;
+    this.relCounts = new Map();
+    this.irrCounts = new Map();
+    this.nRel = 0;
+    this.nIrr = 0;
+  }
+
+  static _tokenize(s: string) {
+    return s.toLowerCase().match(/[a-z.][a-z'#-]{1,}/g) || [];
+  }
+
+  add(text: string, relevant: boolean) {
+    const tokens = new Set(KeywordFinder._tokenize(text));  // doc frequency
+    const target = relevant ? this.relCounts : this.irrCounts;
+    if (relevant) this.nRel++; else this.nIrr++;
+    for (const t of tokens) target.set(t, (target.get(t) || 0) + 1);
+    return this;  // chainable
+  }
+
+  score(word: string) {
+    const a = this.relCounts.get(word) || 0;
+    const b = this.irrCounts.get(word) || 0;
+    const s = this.smoothing;
+    const pRel = (a + s) / (this.nRel + 2 * s);
+    const pIrr = (b + s) / (this.nIrr + 2 * s);
+    return Math.log(pRel / pIrr);
+  }
+
+  _allScores() {
+    const words = new Set([...this.relCounts.keys(), ...this.irrCounts.keys()]);
+    const out = [];
+    for (const w of words) {
+      const a = this.relCounts.get(w) || 0;
+      const b = this.irrCounts.get(w) || 0;
+      if (a + b < this.minCount) continue;
+      out.push({ word: w, score: this.score(w), relDocs: a, irrDocs: b });
+    }
+    return out;
+  }
+
+  topRelevant(n = 50) {
+    return this._allScores().sort((x, y) => y.score - x.score).slice(0, n);
+  }
+
+  topIrrelevant(n = 50) {
+    return this._allScores().sort((x, y) => x.score - y.score).slice(0, n);
+  }
+
+  stats() {
+    return {
+      relevantDocs: this.nRel,
+      irrelevantDocs: this.nIrr,
+      vocabularySize: new Set([...this.relCounts.keys(), ...this.irrCounts.keys()]).size,
+    };
+  }
+
+  reset() {
+    this.relCounts.clear();
+    this.irrCounts.clear();
+    this.nRel = 0;
+    this.nIrr = 0;
+    return this;
+  }
+}
+
+import 'dotenv/config'
+import Database from 'better-sqlite3'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+
+const log = L.makeLogger(undefined, undefined)
+const db = drizzle(new Database(process.env.DB_PATH!))
+Db.migrate(db)
+
+let count = 0
+let matched = 0
+let matched2 = 0
+const titleRegex = /(engineer|developer|programmer|\beng\b|member of technical staff|\bswe\b)/i
+
+const m1 = new KeywordFinder()
+const m2 = new KeywordFinder()
+
+for(let lastRowid = 0;;) {
+    const chunk = db.select({
+        ...D.getTableColumns(Job),
+        rowid: D.sql<number>`rowid`,
+    })
+    .from(Job)
+    .where(D.sql`rowid > ${lastRowid}`)
+    .orderBy(D.sql`rowid`)
+    .limit(4000)
+    .all()
+
+    for(const row of chunk) {
+        const info = JSON.parse(row.info) as Job
+        //if(!titleRegex.test(info.title)) continue
+        const description = parseJobContent(info.content ?? '')
+        if(!description) continue
+
+        count++
+
+        const descriptionDesired = /(typescript|type script|reactjs|nodejs)/i.test(description)
+            || /(Node|React)/.test(description)
+        if(descriptionDesired) {
+            matched2++
+            m2.add(description, true)
+        }
+        else {
+            m2.add(description, false)
+        }
+
+        if(
+            titleRegex.test(info.title)
+                && (
+                    description.includes('C#')
+                        || description.includes('c#')
+                        || description.includes('.net')
+                        || description.includes('.NET')
+                )
+        ) {
+            matched++
+            m1.add(description, true)
+        }
+        else {
+            m1.add(description, false)
+        }
+    }
+
+    if(chunk.length === 0) break
+    lastRowid = chunk.at(-1)!.rowid
+}
+
+console.log(count, matched, matched2)
+console.log(m1.topRelevant())
+

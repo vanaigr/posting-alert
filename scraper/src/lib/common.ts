@@ -183,11 +183,6 @@ export function millisecToDurationString(ms: number) {
     return '>1 d'
 }
 
-export const bannedCompanies = [
-    'jobgether',
-    'g2i',
-]
-
 export function evaluateCompanyTier<J extends { companyName: string }>(
     db: BetterSQLite3Database,
     jobs: J[],
