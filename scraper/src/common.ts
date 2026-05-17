@@ -202,12 +202,12 @@ export function evaluateCompanyTier<J extends { companyName: string }>(
     return companyTier
 }
 
-export function initTierEvaluation<J extends { companyName: string }>(
+export function initTierEvaluation<J extends AnyJobTable>(
     log: L.Log,
     db: BetterSQLite3Database,
-    Company: any,
-    Job: any,
-    calculateTier: (db: BetterSQLite3Database, job: J) => number,
+    Company: AnyCompanyTable,
+    Job: J,
+    calculateTier: (db: BetterSQLite3Database, job: D.InferSelectModel<J>) => number,
 ) {
     const evaluateTiers = () => {
         const companies = db.select({ name: Company.name }).from(Company).all() as { name: string }[]
@@ -216,7 +216,7 @@ export function initTierEvaluation<J extends { companyName: string }>(
         const tiersByCompany = new Map<string, number>()
         for(let lastRowid = 0;;) {
             const chunk = db.select({
-                ...D.getTableColumns(Job),
+                ...D.getTableColumns(Job) as any,
                 rowid: D.sql<number>`rowid`,
             })
                 .from(Job)
@@ -229,7 +229,7 @@ export function initTierEvaluation<J extends { companyName: string }>(
                 const companyTier = tiersByCompany.get(row.companyName) ?? 3
                 if(companyTier === 1) continue
 
-                const tier = calculateTier(db, row)
+                const tier = calculateTier(db, row as any)
                 tiersByCompany.set(row.companyName, Math.min(companyTier, tier))
             }
 
