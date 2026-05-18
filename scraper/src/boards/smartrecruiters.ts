@@ -303,7 +303,7 @@ export function isLocationDesired(job: { info: ShortInfo, longInfo: LongInfo | n
     /*
     const isInUs = job.info.location.country === 'us'
 
-    const isMyLocal = job.info.location.region?.toLowerCase() == 'il' || /chicago/i.test(job.info.location.city ?? '')
+    const isMyLocal = job.info.location.region?.toLowerCase() == 'il' || /\bchicago\b/i.test(job.info.location.city ?? '')
     const isRemoteInUs = isInUs && job.info.location.remote
     const isRemoteWorldwide = (!job.info.location.country || job.info.location.country.toLowerCase() === 'worldwide') && job.info.location.remote
 

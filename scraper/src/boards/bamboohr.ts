@@ -406,7 +406,7 @@ export function isLocationDesired(info: FetchJob) {
     const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = info.atsLocation.country === null && info.atsLocation.state === null && info.atsLocation.province === null && info.atsLocation.city === null
         && info.location.state === null && info.location.city === null
-    const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
+    const isMyLocal = Tier.testMyLocal(cityState)
 
     return isMyLocal || isRemoteInUs || isRemoteWorldwide
     */

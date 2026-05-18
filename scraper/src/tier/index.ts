@@ -74,6 +74,9 @@ export function getYearsOfExperience(description: string) {
     )
 }
 
+export function testMyLocal(location: string) {
+    return /\bIL\b/.test(location) || /\b(illinois|chicago)\b/i.test(location)
+}
 
 export function testMentionsUsConcrete(location: string) {
     return location
@@ -88,8 +91,7 @@ export function testMentionsUsConcrete(location: string) {
 type LocationExtras = Partial<{ remote: boolean, mentionsUs: boolean }>
 
 export function isLocationRelevant(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
+    if(testMyLocal(location)) return true
 
     const isRemoteWorldwide = location.toLowerCase() === 'remote'
     if(isRemoteWorldwide) return true
@@ -108,8 +110,7 @@ export function isLocationRelevant(db: BetterSQLite3Database, location: string, 
     return false
 }
 export function isLocationDesired(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
+    if(testMyLocal(location)) return true
 
     const isRemoteWorldwide = location.toLowerCase() === 'remote'
     if(isRemoteWorldwide) return true
@@ -131,8 +132,7 @@ export function isLocationDesired(db: BetterSQLite3Database, location: string, e
     return false
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
-    const isMyLocal = location.includes('IL') || /(illinois|chicago)/i.test(location)
-    if(isMyLocal) return true
+    if(testMyLocal(location)) return true
 
     const isRemoteWorldwide = location.toLowerCase() === 'remote'
     if(isRemoteWorldwide) return true

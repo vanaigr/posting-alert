@@ -367,7 +367,7 @@ export function isLocationDesired(info: JobInfo) {
     const isRemote = /(remote|nationwide)/i.test(info.title) || info.remote
     const isRemoteInUs = isRemote && isInUs
     const isRemoteWorldwide = !info.country && !info.city
-    const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
+    const isMyLocal = Tier.testMyLocal(cityState)
 
     return isMyLocal || isRemoteInUs || isRemoteWorldwide
     */

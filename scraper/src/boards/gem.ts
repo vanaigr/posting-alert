@@ -269,7 +269,7 @@ export function isLocationDesired(info: JobInfo) {
         const isRemote = /(remote|nationwide|continental)/i.test(info.title) || it.isRemote
         const isRemoteInUs = isRemote && isInUs
         const isRemoteWorldwide = /remote/i.test(it.name)
-        const isMyLocal = /chicago/i.test(it.city) || /chicago/i.test(it.name)
+        const isMyLocal = /\bchicago\b/i.test(it.city) || /\bchicago\b/i.test(it.name)
 
         return isMyLocal || isRemoteInUs || isRemoteWorldwide
     })
