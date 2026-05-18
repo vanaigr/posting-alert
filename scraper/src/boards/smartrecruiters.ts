@@ -46,7 +46,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
                     await processJobDetail(db, log, apiConnection, () => rateLimit = true, job)
                 }
                 catch(err) {
-                    log.E([job])
+                    log.E([err])
                 }
                 finally {
                     jobsInProgress.delete(job.smartrecruiters_fetch_job_details.id)
