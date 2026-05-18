@@ -1,0 +1,15 @@
+[Unit]
+Description=lego certificate renewal
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/me
+ExecStart=/usr/local/bin/lego run \
+          --accept-tos \
+          --email <email> \
+          --server https://acme-v02.api.letsencrypt.org/directory \
+          --profile shortlived \
+          --http --http.webroot /var/www/html \
+          -d <VM external IP>
+
+ExecStartPost=/bin/systemctl reload nginx
