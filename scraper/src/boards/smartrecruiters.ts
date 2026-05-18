@@ -299,6 +299,8 @@ export function isLocationRelevant(job: { info: ShortInfo, longInfo: LongInfo | 
     return isInUs || isRemoteWorldwide
 }
 export function isLocationDesired(job: { info: ShortInfo, longInfo: LongInfo | null }) {
+    return isLocationRelevant(job)
+    /*
     const isInUs = job.info.location.country === 'us'
 
     const isMyLocal = job.info.location.region?.toLowerCase() == 'il' || /chicago/i.test(job.info.location.city ?? '')
@@ -306,6 +308,7 @@ export function isLocationDesired(job: { info: ShortInfo, longInfo: LongInfo | n
     const isRemoteWorldwide = (!job.info.location.country || job.info.location.country.toLowerCase() === 'worldwide') && job.info.location.remote
 
     return isMyLocal || isRemoteInUs || isRemoteWorldwide
+    */
 }
 
 function getDescription(description: [string, string][]) {

@@ -359,6 +359,8 @@ export function isLocationRelevant(info: JobInfo) {
 }
 
 export function isLocationDesired(info: JobInfo) {
+    return isLocationRelevant(info)
+    /*
     const cityState = info.city + ', ' + info.state
 
     const isInUs = info.country.includes('US') || /(united states|u\. ?s\.)/i.test(info.country)
@@ -368,6 +370,7 @@ export function isLocationDesired(info: JobInfo) {
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
     return isMyLocal || isRemoteInUs || isRemoteWorldwide
+    */
 }
 
 function extractJobDescription(log: L.Log, html: string) {

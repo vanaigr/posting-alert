@@ -15,7 +15,6 @@ import * as Gem from './boards/gem.ts'
 import * as Rippling from './boards/rippling.ts'
 import * as Applytojob from './boards/applytojob.ts'
 import * as Smartrecruiters from './boards/smartrecruiters.ts'
-import * as Icims from './boards/icims.ts'
 
 let mainLog: L.Log | undefined
 
@@ -38,19 +37,18 @@ async function main() {
     const sampleSaver = new C.SampleSaver()
 
     await Promise.race([
-        //C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
-        //C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
-        //// TODO: it should pass the samplers and not saver. Claude...
-        //Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), sampleSaver),
-        //Lever.run(db, mainLog.addedCtx('lever'), sampleSaver),
-        //Greenhouse.run(db, mainLog.addedCtx('greenhouse'), sampleSaver),
-        //Bamboohr.run(db, mainLog.addedCtx('bamboohr'), sampleSaver),
-        //Zohorecruit.run(db, mainLog.addedCtx('zohorecruit'), sampleSaver),
-        //Gem.run(db, mainLog.addedCtx('gem'), sampleSaver),
-        //Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
-        //Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
-        //Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
-        Icims.run(db, mainLog.addedCtx('icims'), sampleSaver),
+        C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
+        C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
+        // TODO: it should pass the samplers and not saver. Claude...
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), sampleSaver),
+        Lever.run(db, mainLog.addedCtx('lever'), sampleSaver),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse'), sampleSaver),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr'), sampleSaver),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit'), sampleSaver),
+        Gem.run(db, mainLog.addedCtx('gem'), sampleSaver),
+        Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
+        Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
+        Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

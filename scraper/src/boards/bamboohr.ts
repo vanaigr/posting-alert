@@ -391,6 +391,8 @@ export function isLocationRelevant(info: FetchJob) {
 }
 
 export function isLocationDesired(info: FetchJob) {
+    return isLocationRelevant(info)
+    /*
     const cityState = (info.atsLocation.city || info.location.city || '')
         + ', ' + (info.atsLocation.state || info.location.state || '')
 
@@ -407,4 +409,5 @@ export function isLocationDesired(info: FetchJob) {
     const isMyLocal = cityState.includes('IL') || /(illinois|chicago)/i.test(cityState)
 
     return isMyLocal || isRemoteInUs || isRemoteWorldwide
+    */
 }
