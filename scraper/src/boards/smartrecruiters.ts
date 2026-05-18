@@ -145,7 +145,7 @@ type SearchResponse = {
 }
 type JobDetailsResponse = {
     jobAd: {
-        sections: Record<string, { title: string, text: string }>
+        sections: Record<string, { title: string, text?: string }>
     }
 }
 
@@ -167,7 +167,7 @@ type ShortInfo = {
 }
 
 type LongInfo = {
-    description: [key: string, html: string][] // htmls
+    description: [key: string, html: string | null][] // htmls
 }
 
 async function processJobDetail(
@@ -188,9 +188,9 @@ async function processJobDetail(
             3,
         )
         if(responseResult.status === 'ok') {
-            const description: [string, string][] = []
+            const description: [string, string | null][] = []
             for(const key in responseResult.data.jobAd.sections) {
-                description.push([key, responseResult.data.jobAd.sections[key].text])
+                description.push([key, responseResult.data.jobAd.sections[key].text ?? null])
             }
 
             const longInfo = JSON.stringify({ description } satisfies LongInfo)
@@ -311,16 +311,17 @@ export function isLocationDesired(job: { info: ShortInfo, longInfo: LongInfo | n
     */
 }
 
-function getDescription(description: [string, string][]) {
+function getDescription(description: [string, string | null][]) {
     let content = description
-        .filter(it => it[0] !== 'companyDescription')
-        .map(it => C.parseHtml(it[1]))
+        .filter(it => it[0] !== 'companyDescription' && it[1] !== null)
+        .map(it => C.parseHtml(it[1]!))
         .filter(it => it)
         .join('\n')
 
     if(!content) {
         content = description
-            .map(it => C.parseHtml(it[1]))
+            .filter(it => it[1] !== null)
+            .map(it => C.parseHtml(it[1]!))
             .filter(it => it)
             .join('\n')
     }
