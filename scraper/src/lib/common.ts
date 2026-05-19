@@ -54,7 +54,11 @@ export function selectCompanies<T>(tiers: T[][], probabilities: number[], quota:
     return selectCounts
 }
 
-async function trySendMessage(log: L.Log, message: string): Promise<boolean> {
+type TelegramMessage = { message_id: number, date: string }
+
+async function trySendMessage(log: L.Log, message: string) {
+    type TelegramWrapper<T> = { ok: true, result: T } | { ok: false, description: string }
+
     try {
         const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
@@ -68,24 +72,46 @@ async function trySendMessage(log: L.Log, message: string): Promise<boolean> {
             })
         })
         if(!response.ok) throw new Error(`${response.status}: ${await response.text().catch(it => it)}`)
-        const body = await response.json()
+        const body = await response.json() as TelegramWrapper<TelegramMessage>
         if(!body.ok) {
             throw new Error(`Telegram error: ${body.description}`)
         }
         log.I('Sent successfully')
-        return true
+        return U.result('ok', body.result)
     }
     catch(err) {
         log.E('While sending notification: ', [err])
-        return false
+        return U.status('error')
     }
 }
 
-export async function sendMessage(log: L.Log, db: BetterSQLite3Database, message: string) {
+type MessageInputData = {
+    type: 'boardJob'
+    board: string
+    message: string
+    extra: any
+}
+type MessageData = {
+    type: 'boardJob'
+    board: string
+    message: string
+    telegramMessage: TelegramMessage
+    extra: any
+}
+
+export async function sendMessage(log: L.Log, db: BetterSQLite3Database, data: MessageInputData) {
     const originalEpochMs = Date.now()
-    const ok = await trySendMessage(log, message)
-    if(!ok) {
-        db.insert(Db.pendingNotification).values({ message, originalEpochMs }).run()
+    const result = await trySendMessage(log, data.message)
+    if(result.status === 'ok') {
+        db.insert(Db.sentMessages)
+            .values({
+                data: JSON.stringify(data),
+                telegramMessage: JSON.stringify(result.data),
+            })
+            .run()
+    }
+    else {
+        db.insert(Db.pendingNotification).values({ data: JSON.stringify(data), originalEpochMs }).run()
         log.I('Persisted notification for retry')
     }
 }
@@ -97,14 +123,21 @@ export async function runPendingNotificationService(db: BetterSQLite3Database, l
         const rows = db.select().from(Db.pendingNotification).all()
         for(const row of rows) {
             const suffix = '\n' + `Delayed by: ${millisecToDurationString(Date.now() - row.originalEpochMs)}`
-            const ok = await trySendMessage(log.addedCtx('retry ', [row.id]), row.message + suffix)
-            if(!ok) continue
 
-            try {
-                db.delete(Db.pendingNotification).where(D.eq(Db.pendingNotification.id, row.id)).run()
-            }
-            catch(err) {
-                log.E('Failed to delete pending notification ', [row.id], ': ', [err])
+            const data = JSON.parse(row.data) as MessageInputData
+            data.message = data.message + suffix
+            const result = await trySendMessage(log.addedCtx('retry ', [row.id]), data.message)
+            if(result.status === 'ok') {
+                db.transaction(db => {
+                    db.delete(Db.pendingNotification).where(D.eq(Db.pendingNotification.id, row.id)).run()
+                    db.insert(Db.sentMessages)
+                        .values({
+                            data: JSON.stringify(data),
+                            telegramMessage: JSON.stringify(result.data),
+                        })
+                        .run()
+                })
+
             }
         }
     }

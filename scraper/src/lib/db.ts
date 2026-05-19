@@ -273,7 +273,7 @@ export const smartrecruitersFetchJobDetails = sqliteTable('smartrecruiters_fetch
 
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    message: text('message').notNull(),
+    data: text('data').notNull(),
     originalEpochMs: integer('original_epoch_ms').notNull(),
 })
 
@@ -286,6 +286,12 @@ export const generationResponse = sqliteTable('generation_response', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     input: text('input').notNull(),
     generation: text('generation').notNull(),
+})
+
+export const sentMessages = sqliteTable('sent_messages', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    data: text('data').notNull(),
+    telegramMessage: text('telegram_message').notNull(),
 })
 
 
@@ -828,6 +834,21 @@ PRAGMA mmap_size = 268435456;
             )`)
             tx.run(sql`CREATE INDEX icims_company_tier_checked_idx ON icims_company(tier, checked_epoch_ms)`)
             tx.run(sql`PRAGMA user_version = 32`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 32) {
+            tx.run(sql`delete from pending_notification`)
+            tx.run(sql`ALTER TABLE pending_notification DROP COLUMN message`)
+            tx.run(sql`ALTER TABLE pending_notification ADD COLUMN data TEXT NOT NULL`)
+            tx.run(sql`CREATE TABLE sent_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                telegram_message TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 33`)
         }
     })
 }
