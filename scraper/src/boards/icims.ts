@@ -2,6 +2,7 @@ import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 import * as htmlparser2 from 'htmlparser2'
+import JSON5 from 'json5'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -36,19 +37,20 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
 
     const connection = new Agent({}).compose(interceptors.dns())
 
-    const oneTimeQuota = 2
-    const maxQuota = 5
-
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
         rateLimit = false
+        while(companiesInProcess.size > 20) {
+            mainLog.I('Stalling because ', [companiesInProcess.size], ' is pending')
+            await U.delay(T.Now.instant().add({ seconds: 5 }))
+        }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], {
-            quota: Math.min(Math.max(0, maxQuota - companiesInProcess.size), oneTimeQuota),
+            quota: 1
         })
 
         const jobsToCheckDetails = db.select()
@@ -123,7 +125,6 @@ async function checkCompany(
     let notFound = false
 
     for(let page = 0;; page++) {
-        log.I('Fetching page ', [page])
         const url = `https://${company.name}.icims.com/jobs/search?ss=1&pr=${page}&in_iframe=1`
         const result = await request(log.addedCtx('page ', [page]), connection, url)
         if(result.status === 'rate-limit') return result
@@ -138,8 +139,8 @@ async function checkCompany(
             break
         }
 
-        const jobs = extractJobs(log.addedCtx('page ', [page]), result.data.html)
-        if(jobs.length === 0) break
+        const jobs = extractJobs(log, result.data.html)
+        if(!jobs) break
         rawJobs.push(...jobs)
     }
 
@@ -187,16 +188,12 @@ async function checkCompany(
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const rawJob of rawJobs) {
-        const id = rawJob.id
-        if(!id) continue
+        const id = String(rawJob.idRaw)
+        if(!id || rawJob.idRaw == null) continue
         if(existingJobs.has(id)) continue
         existingJobs.add(id)
 
-        const jobInfo: JobInfo = {
-            title: rawJob.title,
-            url: rawJob.url,
-            location: rawJob.location,
-        }
+        const jobInfo = parseJobInfo(rawJob)
 
         const jobDesired = Tier.isJobDesired(jobInfo.title, undefined)
         const locationDesired = isLocationDesired(db, { info: jobInfo, longInfo: null })
@@ -205,7 +202,7 @@ async function checkCompany(
             companyName: company.name,
             id,
             fetchedEpochMs: currentTime,
-            info: JSON.stringify(jobInfo),
+            info: JSON.stringify(rawJob),
             longInfo: null,
             relevancy: JSON.stringify({
                 jr: Tier.isJobRelevant(jobInfo.title),
@@ -265,7 +262,7 @@ async function processJobDetail(
     fetchDetails: D.InferSelectModel<typeof FetchJobDetails>,
     dbJob: D.InferSelectModel<typeof Job>,
 ) {
-    const job = JSON.parse(dbJob.info) as JobInfo
+    const job = parseJobInfo(JSON.parse(dbJob.info) as RawJob)
 
     const jobUrl = `https://${dbJob.companyName}.icims.com/jobs/${dbJob.id}/job`
 
@@ -332,16 +329,37 @@ async function processJobDetail(
     db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.uniqueId, fetchDetails.uniqueId)).run()
 }
 
+export type RawJob = {
+    positionType?: string
+    location?: { zip?: string, country?: string, city?: string, state?: string }
+    company?: string
+    id?: string
+    idRaw: number
+    position?: number
+    title: string
+    category?: string
+    postedDate?: string
+}
+
 export type JobInfo = {
     title: string
     location: string
-    url: string
 }
 
 export type LongInfo = {
     description: string // html
-    datePosted: string | null
     url: string | null
+    datePosted: string | null
+}
+
+function parseJobInfo(raw: RawJob): JobInfo {
+    const loc = raw.location
+    const parts = [loc?.city, loc?.state, loc?.country]
+        .filter((it): it is string => !!it && it !== 'not set')
+    return {
+        title: raw.title ?? '',
+        location: parts.join(', '),
+    }
 }
 
 async function request(log0: L.Log, connection: Dispatcher | undefined, url: string, tries: number = 1) {
@@ -349,7 +367,14 @@ async function request(log0: L.Log, connection: Dispatcher | undefined, url: str
         const log = t === 0 ? log0 : log0.addedCtx('try ', [t])
 
         try {
-            const response = await undiciFetch(url, { dispatcher: connection })
+            const response = await undiciFetch(url, {
+                dispatcher: connection,
+                headers: {
+                    "User-Agent": "Mozilla/5.0",
+                    Accept: 'text/html',
+                    cookie: 'JSESSIONID=52CC06587858D150719A333D72BB6355',
+                }
+            })
 
             if(response.status === 429) {
                 log.E('Rate limited')
@@ -393,7 +418,7 @@ async function request(log0: L.Log, connection: Dispatcher | undefined, url: str
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const info = JSON.parse(job.info) as JobInfo
+    const info = parseJobInfo(JSON.parse(job.info) as RawJob)
     const longInfo: LongInfo | null = JSON.parse(job.longInfo ?? 'null')
     if(isLocationRelevant(db, { info, longInfo })) {
         if(Tier.isJobRelevant(info.title)) return 1
@@ -418,146 +443,87 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
     })
 }
 
-type RawJob = {
-    id: string
-    title: string
-    location: string
-    url: string
-}
-
-function extractJobs(log: L.Log, html: string) {
-    let jobFound = 0
-
-    let inTableDepth = 0
-    let inCardDepth = 0
-
-    let inLocationDepth = 0
-    let inLocationIgnoreDepth = 0
-    let locationParts: string[] = []
-
-    let inTitleDepth = 0
-    let inTitleIgnoreDepth = 0
-    let titleParts: string[] = []
-
-    let inTitleBlockDepth = 0
-
-    let url: string | undefined
-    let location: string | undefined
-    let title: string | undefined
-
-    const jobs: RawJob[] = []
+function extractJobs(log: L.Log, html: string): RawJob[] | undefined {
+    const scripts: string[] = []
+    let capturing = false
+    let parts: string[] = []
 
     const parser = new htmlparser2.Parser({
-        onopentag(name, attribs) {
-            if(inTableDepth > 0) inTableDepth++
-            if(inCardDepth > 0) inCardDepth++
-            if(inLocationDepth > 0) inLocationDepth++
-            if(inLocationIgnoreDepth > 0) inLocationIgnoreDepth++
-            if(inTitleDepth > 0) inTitleDepth++
-            if(inTitleIgnoreDepth > 0) inTitleIgnoreDepth++
-            if(inTitleBlockDepth > 0) inTitleBlockDepth++
-
-            if(/\b(iCIMS_JobsTable)\b/.test(attribs.class)) {
-                inTableDepth++
-            }
-
-            if(inTableDepth > 0) {
-                if(/\b(iCIMS_JobCardItem)\b/.test(attribs.class)) {
-                    inCardDepth++
-                    jobFound++
-                }
-            }
-
-            if(inCardDepth > 0) {
-                if(inLocationDepth > 0) {
-                    if(/\b(field-label)\b/.test(attribs.class)) {
-                        inLocationIgnoreDepth++
-                    }
-                }
-                if(inTitleDepth > 0) {
-                    if(/\b(field-label)\b/.test(attribs.class)) {
-                        inTitleIgnoreDepth++
-                    }
-                }
-
-                if(/\b(header)\b/.test(attribs.class) && /\b(left)\b/.test(attribs.class)) {
-                    inLocationDepth++
-                }
-                if(/\b(title)\b/.test(attribs.class)) {
-                    inTitleBlockDepth++
-                }
-                if(name === 'a' && /\b(iCIMS_Anchor)\b/.test(attribs.class)) {
-                    url = attribs.href
-                    inTitleDepth++
-                }
+        onopentag(name) {
+            if(name === 'script') {
+                capturing = true
+                parts = []
             }
         },
         ontext(text) {
-            if(inLocationDepth > 0 && inLocationIgnoreDepth === 0) {
-                locationParts.push(text)
-            }
-            if(inTitleDepth > 0 && inTitleIgnoreDepth === 0) {
-                titleParts.push(text)
-            }
+            if(capturing) parts.push(text)
         },
         onclosetag(name) {
-            if(inTableDepth > 0) {
-                inTableDepth--
-            }
-            if(inCardDepth > 0) {
-                inCardDepth--
-                if(inCardDepth === 0) {
-                    if(title === undefined || location === undefined || url === undefined) {
-                        log.W(
-                            'Could not parse job ',
-                            [jobFound], ': ',
-                            [{ title, location, url }],
-                        )
-                    }
-                    else {
-                        const segments = new URL(url).pathname.split('/')
-                        if(segments[1] !== 'jobs' || !segments[2]) {
-                            log.W(
-                                'Could not extract id from ',
-                                [jobs.length],
-                                [[' ', [url]], 'extra-details'],
-                            )
-                        }
-                        else {
-                            jobs.push({
-                                title,
-                                location,
-                                url,
-                                id: segments[2],
-                            })
-                            title = location = url = undefined
-                        }
-                    }
-                }
-            }
-            if(inTitleBlockDepth > 0) inTitleBlockDepth--
-            if(inLocationIgnoreDepth > 0) inLocationIgnoreDepth--
-            if(inTitleIgnoreDepth > 0) inTitleIgnoreDepth--
-            if(inLocationDepth > 0) {
-                inLocationDepth--
-                if(inLocationDepth === 0) {
-                    location = locationParts.join('').trim()
-                    locationParts.length = 0
-                }
-            }
-            if(inTitleDepth > 0) {
-                inTitleDepth--
-                if(inTitleDepth === 0) {
-                    title = titleParts.join('').trim()
-                    titleParts.length = 0
-                }
+            if(name === 'script' && capturing) {
+                scripts.push(parts.join(''))
+                capturing = false
             }
         },
     })
     parser.write(html)
     parser.end()
 
-    return jobs
+    const marker = 'var jobImpressions ='
+    for(const script of scripts) {
+        //console.log(script)
+
+        const mi = script.indexOf(marker)
+        if(mi === -1) continue
+
+        const start = script.indexOf('[', mi + marker.length)
+        if(start === -1) continue
+
+        // Walk forward counting brackets, ignoring those inside string literals
+        // (single, double or template quotes), respecting backslash escapes.
+        let depth = 0
+        let quote: string | null = null
+        let end = -1
+        for(let i = start; i < script.length; i++) {
+            const ch = script[i]
+            if(quote !== null) {
+                if(ch === '\\') {
+                    i++
+                    continue
+                }
+                if(ch === quote) quote = null
+                continue
+            }
+            if(ch === '"' || ch === "'" || ch === '`') {
+                quote = ch
+                continue
+            }
+            if(ch === '[') {
+                depth++
+            }
+            else if(ch === ']') {
+                depth--
+                if(depth === 0) {
+                    end = i
+                    break
+                }
+            }
+        }
+
+        if(end === -1) {
+            log.W('Could not find bounds of jobImpressions array')
+            continue
+        }
+
+        try {
+            return JSON5.parse(script.slice(start, end + 1))
+        }
+        catch(err) {
+            log.W('Could not parse jobImpressions: ', [err])
+            continue
+        }
+    }
+
+    return undefined
 }
 
 function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
