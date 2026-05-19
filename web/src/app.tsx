@@ -43,10 +43,8 @@ type CheckState =
 
 const MAX_SAMPLES = 30
 
-const TYPES = ['ashbyhq', 'lever', 'greenhouse', 'bamboohr', 'zohorecruit', 'gem', 'rippling'] as const
+const TYPES = ['ashbyhq', 'lever', 'greenhouse', 'bamboohr', 'zohorecruit', 'gem', 'rippling', 'applytojob', 'icims', 'smartrecruiters'] as const
 type Type = typeof TYPES[number]
-
-// TODO: add applytojob
 
 function formatBytes(bytes: number): string {
     if(bytes < 0) return 'N/A'
@@ -269,7 +267,7 @@ export default function App() {
                 </>}
                 <button
                     onClick={send}
-                    disabled={check.status === 'pending' || (isUrl ? !input.trim() : (!companyName.trim() || !jobId.trim()))}
+                    disabled={check.status === 'pending' || (isUrl ? !input.trim() : ((type !== 'smartrecruiters' && !companyName.trim()) || !jobId.trim()))}
                     className='px-4 py-2 rounded bg-blue-600 text-sm font-medium disabled:opacity-50 active:bg-blue-700'
                 >
                     Send

@@ -181,11 +181,47 @@ export function ripplingGetPostingParams(db: BetterSQLite3Database, companyName:
     }
 }
 
+export function icimsGetPostingParams(db: BetterSQLite3Database, companyName: string, jobId: string): PostingParams | undefined {
+    return {
+        company: calculateCompanyParams(lookupCompany(db, Db.icimsCompany, companyName)),
+        job: ((): JobParams | undefined => {
+            const job = lookupJob(db, Db.icimsJob, companyName, jobId)
+            if(!job) return
+
+            const longInfo = job.longInfo ? JSON.parse(job.longInfo) : null
+            return {
+                fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: longInfo?.datePosted ? new Date(longInfo.datePosted).getTime() : null,
+                ...unpackRelevancy(job.relevancy),
+            }
+        })(),
+    }
+}
+
+export function smartrecruitersGetPostingParams(db: BetterSQLite3Database, jobId: string): PostingParams | undefined {
+    return {
+        company: undefined,
+        job: ((): JobParams | undefined => {
+            const job = db.select().from(Db.smartrecruitersJob)
+                .where(D.eq(Db.smartrecruitersJob.id, jobId))
+                .get()
+            if(!job) return
+
+            const info = JSON.parse(job.info)
+            return {
+                fetchedEpochMs: job.fetchedEpochMs,
+                publishedEpochMs: info.releasedDate ? new Date(info.releasedDate).getTime() : null,
+                ...unpackRelevancy(job.relevancy),
+            }
+        })(),
+    }
+}
+
 if(import.meta.main) {
     const [sourceArg, companyName, jobId] = process.argv.slice(2)
 
     if(!sourceArg || !companyName || !jobId) {
-        console.error('Usage: check <ashby|lever|greenhouse|bamboo|zoho> <companyName> <jobId>')
+        console.error('Usage: check <ashby|lever|greenhouse|bamboo|zoho|gem|rippling|applytojob|icims|smartrecruiters> <companyName> <jobId>')
         process.exit(1)
     }
 
@@ -215,6 +251,12 @@ if(import.meta.main) {
         }
         else if(sourceArg === 'applytojob') {
             return applytojobGetPostingParams(db, companyName, jobId)
+        }
+        else if(sourceArg === 'icims') {
+            return icimsGetPostingParams(db, companyName, jobId)
+        }
+        else if(sourceArg === 'smartrecruiters') {
+            return smartrecruitersGetPostingParams(db, jobId)
         }
     })()
     if(params === undefined) {

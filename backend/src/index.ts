@@ -17,8 +17,6 @@ import * as Check from '../../scraper/src/check.ts'
 
 let mainLog: L.Log | undefined
 
-// TODO: add applytojob
-
 const searchTimezone = process.env.SEARCH_TIMEZONE
 const expectedUserId = process.env.TELEGRAM_USER_ID
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
@@ -201,6 +199,37 @@ async function main() {
 
                 return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
             }
+            else if(url.hostname.endsWith('.applytojob.com')) {
+                const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
+                const jobId = url.pathname
+                log.I('Applytojob with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.applytojobGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname.endsWith('.icims.com')) {
+                const segments = url.pathname.split('/')
+                const companyName = url.hostname.slice(0, url.hostname.indexOf('.'))
+                const jobId = segments[2]
+                log.I('Icims with ', [companyName], ', ', [jobId])
+                if(!companyName || !jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.icimsGetPostingParams(_db, companyName, jobId))
+            }
+            else if(url.hostname === 'jobs.smartrecruiters.com') {
+                const segments = url.pathname.split('/')
+                const jobId = segments[2]?.split('-')[0]
+                log.I('Smartrecruiters with ', [jobId])
+                if(!jobId) {
+                    return c.json({}, { status: 400 })
+                }
+
+                return c.json(Check.smartrecruitersGetPostingParams(_db, jobId))
+            }
 
             log.I('Unknown url')
             return c.json({}, { status: 404 })
@@ -222,6 +251,9 @@ async function main() {
             if(type === 'zohorecruit') return c.json(Check.zohorecruitGetPostingParams(_db, companyName, jobId))
             if(type === 'gem') return c.json(Check.gemGetPostingParams(_db, companyName, jobId))
             if(type === 'rippling') return c.json(Check.ripplingGetPostingParams(_db, companyName, jobId))
+            if(type === 'applytojob') return c.json(Check.applytojobGetPostingParams(_db, companyName, jobId))
+            if(type === 'icims') return c.json(Check.icimsGetPostingParams(_db, companyName, jobId))
+            if(type === 'smartrecruiters') return c.json(Check.smartrecruitersGetPostingParams(_db, jobId))
 
             log.I('Unknown type')
             return c.json({}, { status: 404 })
