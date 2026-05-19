@@ -157,5 +157,5 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
 export function isRequiringClearance(title: string, description: string | undefined) {
     const text = [title, description].filter(it => it !== undefined && it).join('\n')
 
-    return /(\bTS\/SCI\b|\bcitizen|\bclearance\b|\bexport control)/i.test(text)
+    return /(\bTS\/SCI\b|\b(us|u\. ?s\.) citizen|\bclearance\b|\bexport control)/i.test(text)
 }
