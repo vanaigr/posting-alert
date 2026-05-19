@@ -223,7 +223,7 @@ type GraphqlResponse = {
         name: string
         city: string
         isRemote: boolean
-        isoCountry: string // 3 letter
+        isoCountry: string | null // 3 letter
       }[]
     }[]
   }
@@ -239,7 +239,7 @@ export type JobInfo = {
         name: string
         city: string
         isRemote: boolean
-        isoCountry: string // 3 letter
+        isoCountry: string | null // 3 letter
     }[]
 }
 
@@ -255,7 +255,7 @@ function calculateTier(_db: BetterSQLite3Database, job: D.InferSelectModel<typeo
 export function isLocationRelevant(info: JobInfo) {
     return info.locations.some(it => {
         const isInUs = it.isoCountry === 'USA'
-        const isRemoteWorldwide = /remote/i.test(it.name)
+        const isRemoteWorldwide = (it.isRemote || /(remote|global|international)/i.test(it.name)) && !it.isoCountry
 
         return isInUs || isRemoteWorldwide
     })
@@ -266,9 +266,9 @@ export function isLocationDesired(info: JobInfo) {
     /*
     return info.locations.some(it => {
         const isInUs = it.isoCountry === 'USA'
-        const isRemote = /(remote|nationwide|continental)/i.test(info.title) || it.isRemote
+        const isRemote = it.isRemote || /(remote|nationwide|continental)/i.test(info.title)
         const isRemoteInUs = isRemote && isInUs
-        const isRemoteWorldwide = /remote/i.test(it.name)
+        const isRemoteWorldwide = (it.isRemote || /(remote|global|international)/i.test(it.name)) && !it.isoCountry
         const isMyLocal = /\bchicago\b/i.test(it.city) || /\bchicago\b/i.test(it.name)
 
         return isMyLocal || isRemoteInUs || isRemoteWorldwide
