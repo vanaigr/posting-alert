@@ -87,6 +87,8 @@ async function updateLatestJobs(
             .map(it => it.id)
     )
 
+    const companiesToSkip = new Set(C.getCompaniesToSkip(db))
+
     const toInsert: D.InferInsertModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const job of requestResult.data.content) {
@@ -102,6 +104,7 @@ async function updateLatestJobs(
 
         const jobDesired = Tier.isJobDesired(info.name, undefined)
         const locationDesired = isLocationDesired({ info, longInfo: null })
+        const companyAllowed = !companiesToSkip.has(info.company.identifier)
 
         toInsert.push({
             id: job.id,
@@ -109,6 +112,7 @@ async function updateLatestJobs(
             info: JSON.stringify(info),
             longInfo: null,
             relevancy: JSON.stringify({
+                ca: companyAllowed,
                 jr: Tier.isJobRelevant(info.name),
                 lr: isLocationRelevant({ info, longInfo: null }),
                 jd: jobDesired,
@@ -117,7 +121,7 @@ async function updateLatestJobs(
         })
 
         log.I('New job ', [job.id])
-        if(jobDesired && locationDesired) {
+        if(companyAllowed && jobDesired && locationDesired) {
             log.I('Job ', job.id, ' is initially relevant, queuing for detail fetch')
             toEnqueueDetails.push({
                 id: job.id,

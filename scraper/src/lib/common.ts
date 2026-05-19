@@ -345,8 +345,12 @@ const bannedCompanies = [
     'brightvisiontechnologies',
 ]
 
-function getCompaniesToSkip() {
-    return [...bannedCompanies]
+export function getCompaniesToSkip(db: BetterSQLite3Database) {
+    const bannedInTable = db.select({ name: Db.companyBans.companyName })
+        .from(Db.companyBans)
+        .all()
+        .map(it => it.name)
+    return [...bannedCompanies, ...bannedInTable]
 }
 
 export function getCompaniesToCheck<T extends AnyCompanyTable>(
@@ -357,7 +361,7 @@ export function getCompaniesToCheck<T extends AnyCompanyTable>(
 ): GetCompaniesToCheckReturn<T> {
     const quota = options?.quota ?? 5
     const weights = options?.weights ?? [0.5, 0.25]
-    const companiesToSkip = [...companiesInProgress, ...getCompaniesToSkip()]
+    const companiesToSkip = [...getCompaniesToSkip(db), ...companiesInProgress]
 
     const overnightInfo = getOvernightInfo()
     if(overnightInfo.isOvernight) {

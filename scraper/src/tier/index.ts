@@ -154,13 +154,6 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
     return false
 }
 
-// TODO: remove
-export const bannedCompanies = [
-    'jobgether',
-    'g2i',
-    'brightvisiontechnologies',
-]
-
 export function isRequiringClearance(title: string, description: string | undefined) {
     const text = [title, description].filter(it => it !== undefined && it).join('\n')
 
