@@ -203,13 +203,12 @@ async function processJobDetail(
     }
 
     let shouldSend = false
-    if(!fetchRow.smartrecruiters_job.longInfo) {
+    const longInfo: LongInfo = fetchRow.smartrecruiters_job.longInfo ? JSON.parse(fetchRow.smartrecruiters_job.longInfo) : undefined
+    if(!longInfo) {
         log.W('Could not get job info. Considering relevant')
         shouldSend = true
     }
     else {
-        const longInfo: LongInfo = JSON.parse(fetchRow.smartrecruiters_job.longInfo)
-
         const jobDesired = Tier.isJobDesired(info.name, getDescription(longInfo.description))
         const locationDesired = isLocationDesired({ info: info, longInfo })
         if(jobDesired && locationDesired) {
@@ -259,7 +258,8 @@ async function processJobDetail(
                 message: info.name + ' @ ' + info.company.name + '\n'
                     + remoteness + ': ' + location + '\n'
                     + `SR ${ago} (< ${maxAgo}) ago: `
-                    + info.applyUrl,
+                    + info.applyUrl
+                    + (Tier.isRequiringClearance(info.name, getDescription(longInfo.description)) ? '⚠️ clearance?' : '')
             },
         )
     }

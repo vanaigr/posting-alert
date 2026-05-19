@@ -118,7 +118,8 @@ async function checkCompany(
         const id = String(job.id)
         if(existingJobs.has(id)) continue
 
-        const jobDesired = Tier.isJobDesired(job.title, job.content ? parseJobContent(job.content) : undefined)
+        const description = job.content ? parseJobContent(job.content) : undefined
+        const jobDesired = Tier.isJobDesired(job.title, description)
         const locationDesired = isLocationDesired(db, job)
 
         const relevancy: Record<string, unknown> = {
@@ -165,7 +166,8 @@ async function checkCompany(
                             },
                             message: job.title + ' @ ' + company.name + '\n'
                                 + (job.location?.name ?? '') + '\n'
-                                + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url,
+                                + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url
+                                + (Tier.isRequiringClearance(job.title, description) ? '⚠️ clearance?' : '')
                         },
                     )
                 }

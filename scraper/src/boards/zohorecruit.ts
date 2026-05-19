@@ -248,12 +248,12 @@ async function processJobDetail(
     }
 
     let shouldSend = false
-    if(!dbJob.longInfo) {
+    const longInfo = dbJob.longInfo ? JSON.parse(dbJob.longInfo) as LongInfo : undefined
+    if(!longInfo) {
         log.W('Could not get job info. Considering relevant')
         shouldSend = true
     }
     else {
-        const longInfo = JSON.parse(dbJob.longInfo) as LongInfo
         const jobDesired = Tier.isJobDesired(job.title, C.parseHtml(longInfo.description))
         const locationDesired = isLocationDesired(job)
         if(jobDesired && locationDesired) {
@@ -299,7 +299,8 @@ async function processJobDetail(
                 message: job.title + ' @ ' + dbJob.companyName + '\n'
                     + workplaceType + ': ' + location + '\n'
                     + `Zoho ${fetchDetails.companyTier} < ${maxAgo} ago: `
-                    + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
+                    + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`
+                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
             },
         )
     }

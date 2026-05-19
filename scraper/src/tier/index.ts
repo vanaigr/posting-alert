@@ -159,3 +159,9 @@ export const bannedCompanies = [
     'g2i',
     'brightvisiontechnologies',
 ]
+
+export function isRequiringClearance(title: string, description: string | undefined) {
+    const text = [title, description].filter(it => it !== undefined && it).join('\n')
+
+    return /(\bTS\/SCI\b|\bcitizen|\bclearance\b|\bexport control)/i.test(text)
+}

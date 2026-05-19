@@ -273,6 +273,8 @@ async function processJobDetail(
     }
 
     if(shouldSend) {
+        const longInfo = dbJob.longInfo ? JSON.parse(dbJob.longInfo) as LongInfo : undefined
+
         const workplaceType = (() => {
             if(job.isRemote) return 'Remote'
             if(job.locationType === '0') return 'On-site'
@@ -303,7 +305,8 @@ async function processJobDetail(
                 message: job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
                     + workplaceType + ': ' + location + '\n'
                     + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
-                    + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+                    + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`
+                    + (Tier.isRequiringClearance(job.jobOpeningName, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
             },
         )
     }

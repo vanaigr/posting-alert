@@ -128,7 +128,8 @@ async function checkCompany(
             locations: rawJob.locations,
         }
 
-        const jobDesired = Tier.isJobDesired(jobInfo.title, C.parseHtml(jobInfo.descriptionHtml))
+        const description = C.parseHtml(jobInfo.descriptionHtml)
+        const jobDesired = Tier.isJobDesired(jobInfo.title, description)
         const locationDesired = isLocationDesired(jobInfo)
 
         toInsert.push({
@@ -167,7 +168,8 @@ async function checkCompany(
                         },
                         message: jobInfo.title + ' @ ' + company.name + '\n'
                             + locations.join(' | ') + '\n'
-                            + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${id}`,
+                            + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${id}`
+                    + (Tier.isRequiringClearance(jobInfo.title, description) ? '⚠️ clearance?' : '')
                     },
                 ))
             }

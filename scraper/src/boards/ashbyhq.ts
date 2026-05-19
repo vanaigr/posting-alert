@@ -284,6 +284,7 @@ async function processJobDetail(
     }
 
     if(shouldSend) {
+        const longInfo = fetchRow.ashbyhq_job.longInfo ? JSON.parse(fetchRow.ashbyhq_job.longInfo) : undefined
         const tier = fetchRow.ashby_fetch_job_details.companyTier
 
         const maxAgo = C.millisecToDurationString(Date.now() - fetchRow.ashby_fetch_job_details.jobPostedAfter)
@@ -302,6 +303,7 @@ async function processJobDetail(
                     + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
                     + `Ashby ${tier} < ${maxAgo} ago: `
                     + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
+                    + (Tier.isRequiringClearance(info.job.title, longInfo.descriptionHtml ? C.parseHtml(longInfo.descriptionHtml) : undefined) ? '⚠️ clearance?' : '')
             },
         )
     }

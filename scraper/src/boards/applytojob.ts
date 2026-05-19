@@ -308,7 +308,8 @@ async function processJobDetail(
                 },
                 message: job.title + ' @ ' + dbJob.companyName + '\n'
                     + (job.location || 'none') + '\n'
-                    + `Applytojob ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url,
+                    + `Applytojob ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url + '\n'
+                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
             },
         )
     }
