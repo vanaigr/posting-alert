@@ -36,20 +36,19 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
 
     const connection = new Agent({}).compose(interceptors.dns())
 
+    const oneTimeQuota = 2
+    const maxQuota = 5
+
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
         rateLimit = false
-        while(companiesInProcess.size > 20) {
-            mainLog.I('Stalling because ', [companiesInProcess.size], ' is pending')
-            await U.delay(T.Now.instant().add({ seconds: 5 }))
-        }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], {
-            quota: 1
+            quota: Math.min(Math.max(0, maxQuota - companiesInProcess.size), oneTimeQuota),
         })
 
         const jobsToCheckDetails = db.select()
@@ -124,6 +123,7 @@ async function checkCompany(
     let notFound = false
 
     for(let page = 0;; page++) {
+        log.I('Fetching page ', [page])
         const url = `https://${company.name}.icims.com/jobs/search?ss=1&pr=${page}&in_iframe=1`
         const result = await request(log.addedCtx('page ', [page]), connection, url)
         if(result.status === 'rate-limit') return result
@@ -139,7 +139,7 @@ async function checkCompany(
         }
 
         const jobs = extractJobs(log.addedCtx('page ', [page]), result.data.html)
-        if(!jobs) break
+        if(jobs.length === 0) break
         rawJobs.push(...jobs)
     }
 
@@ -508,7 +508,11 @@ function extractJobs(log: L.Log, html: string) {
                 inCardDepth--
                 if(inCardDepth === 0) {
                     if(title === undefined || location === undefined || url === undefined) {
-                        log.W('Could not parse job ', [jobFound])
+                        log.W(
+                            'Could not parse job ',
+                            [jobFound], ': ',
+                            [{ title, location, url }],
+                        )
                     }
                     else {
                         const segments = new URL(url).pathname.split('/')
