@@ -3,11 +3,13 @@ import crypto from 'node:crypto'
 
 import Database from 'better-sqlite3'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+import * as D from 'drizzle-orm'
 import System from 'systeminformation'
 
 import { serve } from '@hono/node-server'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
+import * as T from './lib/temporal.ts'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
 import * as Db from './lib/db.ts'
@@ -17,6 +19,7 @@ let mainLog: L.Log | undefined
 
 // TODO: add applytojob
 
+const searchTimezone = process.env.SEARCH_TIMEZONE
 const expectedUserId = process.env.TELEGRAM_USER_ID
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
 const allowedOrigin = process.env.ALLOWED_ORIGIN
@@ -32,6 +35,7 @@ async function main() {
         mainLog.E('Unhandled rejection from ', [promise], ': ', [reason])
     })
 
+    if(!searchTimezone) throw new Error('search timezone is not provided')
     if(!expectedUserId) throw new Error('expected user id is not provided')
     if(!telegramBotToken) throw new Error('expected bot id is not provided')
     if(!allowedOrigin) throw new Error('allowed origin id is not provided')
@@ -63,11 +67,26 @@ async function main() {
             System.fsSize(),
         ])
 
+        const todayBegin = T.Now.instant().toZonedDateTimeISO(searchTimezone).startOfDay().toInstant().epochMilliseconds / 1000
+
+        const reactions = db.select().from(Db.messageReactions)
+            .where(D.gte(D.sql<number>`json_extract(${Db.messageReactions.data}, '$.date')`, todayBegin))
+            .all()
+        const todayReactions: Record<string, number> = {}
+        for(const reaction of reactions) {
+            const data = JSON.parse(reaction.data) as MessageReactionUpdated
+            for(const it of data.new_reaction) {
+                if(it.type !== 'emoji') continue
+                todayReactions[it.emoji] = (todayReactions[it.emoji] ?? 0) + 1
+            }
+        }
+
         return c.json({
             cpuLoadPercents: cpu.cpus.map(it => it.load),
             ramTotalBytes: mem.total,
             ramFreeBytes: mem.available,
             storageFreeBytes: fileSystem.find(it => it.mount === '/')?.available ?? -1,
+            todayReactions,
         })
     })
 
@@ -219,35 +238,6 @@ async function main() {
             return new Response('', { status: 401 })
         }
 
-        type User = {
-            id: number
-            first_name: string
-            last_name?: string
-            username?: string
-        }
-        type ReactionType = { type: 'emoji', emoji: string }
-            | { type: 'custom_emoji', custom_emoji_id: string }
-            | { type: 'paid' }
-        type MessageReactionUpdated = {
-            //chat: Chat
-            message_id: number
-            user?: User
-            //actor_chat?: Chat
-            date: number
-            new_reaction: ReactionType[]
-        }
-        type Message = {
-            message_id: number
-            //chat: Chat
-            from?: User
-            date: number
-            edit_date?: number
-            reply_to_message?: Message
-
-            text?: string
-            caption?: string
-        }
-
         const body = await c.req.json()
         log.I('Serving', [[' ', body], 'extra-details'])
         if(body.message_reaction !== undefined) {
@@ -385,4 +375,34 @@ function verifyInitData(log: L.Log, initData: string) {
     }
 
     return U.result('ok', { userId })
+}
+
+
+type User = {
+    id: number
+    first_name: string
+    last_name?: string
+    username?: string
+}
+type ReactionType = { type: 'emoji', emoji: string }
+| { type: 'custom_emoji', custom_emoji_id: string }
+| { type: 'paid' }
+type MessageReactionUpdated = {
+    //chat: Chat
+    message_id: number
+    user?: User
+    //actor_chat?: Chat
+    date: number
+    new_reaction: ReactionType[]
+}
+type Message = {
+    message_id: number
+    //chat: Chat
+    from?: User
+    date: number
+    edit_date?: number
+    reply_to_message?: Message
+
+    text?: string
+    caption?: string
 }
