@@ -116,7 +116,8 @@ async function checkCompany(
     for(const job of result.data) {
         if(existingJobs.has(job.id)) continue
 
-        const jobDesired = Tier.isJobDesired(job.text, job.descriptionPlain)
+        const description = getJobDescription(job)
+        const jobDesired = Tier.isJobDesired(job.text, description)
         const locationDesired = isLocationDesired(db, job)
 
         const relevancy: Record<string, unknown> = {
@@ -139,6 +140,7 @@ async function checkCompany(
                 hostedUrl: job.hostedUrl,
                 text: job.text,
                 workplaceType: job.workplaceType,
+                description: !job.descriptionPlain ? job.description : undefined,
                 descriptionPlain: job.descriptionPlain,
             } satisfies JobInfo),
             relevancy: '',
@@ -173,7 +175,7 @@ async function checkCompany(
                             message: job.text + ' @ ' + company.name + '\n'
                                 + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
                                 + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl)
-                                + (Tier.isRequiringClearance(job.text, job.descriptionPlain) ? '⚠️ clearance?' : '')
+                                + (Tier.isRequiringClearance(job.text, description) ? '⚠️ clearance?' : '')
                         },
                     )
                 }
@@ -254,7 +256,7 @@ export type FetchJob = {
     },
     createdAt: number
     descriptionPlain: string
-    description: string
+    description: string // html
     id: string
     lists: {
         text: string
@@ -308,8 +310,14 @@ function getJobLocation(info: JobInfo) {
 function isRemote(info: JobInfo) {
     if(info.workplaceType === 'remote') return true
     if(info.workplaceType !== 'onsite' && info.workplaceType !== 'hybrid') {
-        return !info.descriptionPlain || /(?<!not )(?<!not a )\bremote/i.test(info.descriptionPlain)
+        const description = getJobDescription(info)
+        return !description || /(?<!not )(?<!not a )\bremote/i.test(description)
     }
+}
+
+function getJobDescription(info: JobInfo) {
+    if(info.descriptionPlain) return info.descriptionPlain
+    if(info.description) return C.parseHtml(info.description)
 }
 
 type JobInfo = {
@@ -321,6 +329,7 @@ type JobInfo = {
         location: string
         team: string
     }
+    description?: string
     descriptionPlain?: string
     country: string | null // 2 letter country code, or multiple
     createdAt: number // epoch ms
