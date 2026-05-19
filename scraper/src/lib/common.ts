@@ -124,7 +124,18 @@ export async function runPendingNotificationService(db: BetterSQLite3Database, l
         for(const row of rows) {
             const suffix = '\n' + `Delayed by: ${millisecToDurationString(Date.now() - row.originalEpochMs)}`
 
-            const data = JSON.parse(row.data) as MessageInputData
+            const data: MessageInputData = (() => {
+                const data = JSON.parse(row.data) as MessageInputData | string
+                if(typeof data !== 'string') return data
+
+                return {
+                    type: 'boardJob',
+                    board: 'unknown',
+                    extra: {},
+                    message: data,
+                }
+            })()
+
             data.message = data.message + suffix
             const result = await trySendMessage(log.addedCtx('retry ', [row.id]), data.message)
             if(result.status === 'ok') {
