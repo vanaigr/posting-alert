@@ -2,7 +2,6 @@ import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
 import * as htmlparser2 from 'htmlparser2'
-import JSON5 from 'json5'
 
 import * as U from '../lib/util.ts'
 import * as L from '../lib/log.ts'
@@ -188,8 +187,8 @@ async function checkCompany(
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const rawJob of rawJobs) {
-        const id = String(rawJob.idRaw)
-        if(!id || rawJob.idRaw == null) continue
+        const id = rawJob.id
+        if(!id) continue
         if(existingJobs.has(id)) continue
         existingJobs.add(id)
 
@@ -330,15 +329,14 @@ async function processJobDetail(
 }
 
 export type RawJob = {
-    positionType?: string
-    location?: { zip?: string, country?: string, city?: string, state?: string }
-    company?: string
-    id?: string
-    idRaw: number
-    position?: number
+    id: string
+    href: string
     title: string
-    category?: string
-    postedDate?: string
+    location: string | null
+    postedDate: string | null
+    description: string | null
+    requisitionId: string | null
+    category: string | null
 }
 
 export type JobInfo = {
@@ -353,12 +351,9 @@ export type LongInfo = {
 }
 
 function parseJobInfo(raw: RawJob): JobInfo {
-    const loc = raw.location
-    const parts = [loc?.city, loc?.state, loc?.country]
-        .filter((it): it is string => !!it && it !== 'not set')
     return {
         title: raw.title ?? '',
-        location: parts.join(', '),
+        location: raw.location ?? '',
     }
 }
 
@@ -443,87 +438,143 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
     })
 }
 
+// Each posting is one <li class="iCIMS_JobCardItem">…</li>. We match the whole
+// card so location, posted date and description (which sit OUTSIDE the anchor)
+// stay associated with the right job.
+const JOB_CARD_RE = /<li[^>]+class="[^"]*iCIMS_JobCardItem[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+// Anchor inside a card — gives us href, id, and the <h3> title.
+const JOB_ANCHOR_RE = /<a[^>]+href="(https?:\/\/[^"]*?\/jobs\/(\d+)\/[^"]*?\/job[^"]*)"[^>]*class="[^"]*iCIMS_Anchor[^"]*"[^>]*>([\s\S]*?)<\/a>/i
+const TITLE_RE = /<h3[^>]*>([\s\S]*?)<\/h3>/i
+// `<span class="sr-only field-label">Job Locations</span> <span>VALUE</span>`
+const LOCATION_RE = /<span[^>]+class="[^"]*sr-only[^"]*field-label[^"]*"[^>]*>\s*Job Locations\s*<\/span>\s*<span[^>]*>\s*([^<]*?)\s*<\/span>/i
+// Posted-at: `<span title="5/6/2026 10:23 AM">3 hours ago…</span>`. The title
+// attribute is the absolute timestamp; we keep it as the raw string.
+const DATE_TITLE_RE = /<span[^>]+title="(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)"/i
+// Per-job header `<dt>{label}</dt> <dd><span>{value}</span></dd>` pairs.
+const HEADER_TAG_RE = /<dt[^>]*>([\s\S]*?)<\/dt>\s*<dd[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>/gi
+const DESC_RE = /<div[^>]+class="[^"]*col-xs-12[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+// iCIMS encodes locations as Country-State-City (e.g. "US-SC-Prosperity",
+// "CA-ON-Toronto"). We reverse to City, State, Country for readability and
+// consistency with the other boards — but only when the dash shape matches;
+// opaque strings ("Remote", "Multiple Locations") pass through unchanged.
+const DASH_LOC_RE = /^([A-Z]{2,3})-([A-Z0-9 ]{1,40})(?:-([^-].*))?$/
+
+function strip(html: string) {
+    return C.parseHtml(html)
+}
+
+function htmlUnescape(s: string) {
+    return s
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#0*39;/g, "'")
+        .replace(/&#x0*27;/gi, "'")
+}
+
 function extractJobs(log: L.Log, html: string): RawJob[] | undefined {
-    const scripts: string[] = []
-    let capturing = false
-    let parts: string[] = []
+    const jobs: RawJob[] = []
+    const seenInPage = new Set<string>()
 
-    const parser = new htmlparser2.Parser({
-        onopentag(name) {
-            if(name === 'script') {
-                capturing = true
-                parts = []
-            }
-        },
-        ontext(text) {
-            if(capturing) parts.push(text)
-        },
-        onclosetag(name) {
-            if(name === 'script' && capturing) {
-                scripts.push(parts.join(''))
-                capturing = false
-            }
-        },
-    })
-    parser.write(html)
-    parser.end()
+    JOB_CARD_RE.lastIndex = 0
+    let card: RegExpExecArray | null
+    while((card = JOB_CARD_RE.exec(html)) !== null) {
+        const body = card[1]
 
-    const marker = 'var jobImpressions ='
-    for(const script of scripts) {
-        //console.log(script)
+        const anchor = JOB_ANCHOR_RE.exec(body)
+        if(anchor === null) continue
 
-        const mi = script.indexOf(marker)
-        if(mi === -1) continue
+        const id = anchor[2]
+        // iCIMS sometimes renders multiple anchors per job (title + icon
+        // link); dedup within the page so cross-page logic gets clean input.
+        if(seenInPage.has(id)) continue
+        seenInPage.add(id)
 
-        const start = script.indexOf('[', mi + marker.length)
-        if(start === -1) continue
+        const titleMatch = TITLE_RE.exec(anchor[3])
+        if(!titleMatch) continue
+        const title = strip(titleMatch[1])
+        if(!title) continue
 
-        // Walk forward counting brackets, ignoring those inside string literals
-        // (single, double or template quotes), respecting backslash escapes.
-        let depth = 0
-        let quote: string | null = null
-        let end = -1
-        for(let i = start; i < script.length; i++) {
-            const ch = script[i]
-            if(quote !== null) {
-                if(ch === '\\') {
-                    i++
-                    continue
-                }
-                if(ch === quote) quote = null
-                continue
-            }
-            if(ch === '"' || ch === "'" || ch === '`') {
-                quote = ch
-                continue
-            }
-            if(ch === '[') {
-                depth++
-            }
-            else if(ch === ']') {
-                depth--
-                if(depth === 0) {
-                    end = i
-                    break
-                }
-            }
-        }
-
-        if(end === -1) {
-            log.W('Could not find bounds of jobImpressions array')
-            continue
-        }
-
-        try {
-            return JSON5.parse(script.slice(start, end + 1))
-        }
-        catch(err) {
-            log.W('Could not parse jobImpressions: ', [err])
-            continue
-        }
+        jobs.push({
+            id,
+            href: htmlUnescape(anchor[1]),
+            title,
+            location: extractLocation(body),
+            postedDate: extractPostedAt(body),
+            description: extractDescription(body),
+            requisitionId: extractRequisitionId(body),
+            category: extractHeaderValue(body, 'Category'),
+        })
     }
 
-    return undefined
+    if(jobs.length === 0) {
+        log.W('No job cards found on page')
+        return undefined
+    }
+    return jobs
+}
+
+function normalizeLocation(raw: string) {
+    const match = DASH_LOC_RE.exec(raw)
+    if(!match) return raw
+    return [match[3], match[2], match[1]]
+        .filter((it): it is string => !!it && !!it.trim())
+        .map(it => it.trim())
+        .join(', ')
+}
+
+function extractLocation(cardBody: string): string | null {
+    const match = LOCATION_RE.exec(cardBody)
+    if(match) {
+        const raw = strip(match[1])
+        if(raw) return normalizeLocation(raw)
+    }
+    // Fall back to the per-job header tags (City / State / Country).
+    const parts: { city?: string, state?: string, country?: string } = {}
+    HEADER_TAG_RE.lastIndex = 0
+    let tag: RegExpExecArray | null
+    while((tag = HEADER_TAG_RE.exec(cardBody)) !== null) {
+        const label = strip(tag[1]).toLowerCase()
+        const value = strip(tag[2])
+        if(!value) continue
+        if(label.includes('city')) parts.city = value
+        else if(label.includes('state') || label.includes('province')) parts.state = value
+        else if(label.includes('country')) parts.country = value
+    }
+    const ordered = [parts.city, parts.state, parts.country]
+        .filter((it): it is string => !!it)
+    return ordered.length > 0 ? ordered.join(', ') : null
+}
+
+function extractPostedAt(cardBody: string): string | null {
+    const match = DATE_TITLE_RE.exec(cardBody)
+    return match ? match[1].trim() : null
+}
+
+function extractDescription(cardBody: string): string | null {
+    const match = DESC_RE.exec(cardBody)
+    if(!match) return null
+    const text = strip(match[1])
+    return text || null
+}
+
+function extractRequisitionId(cardBody: string): string | null {
+    return extractHeaderValue(cardBody, 'Requisition ID') ?? extractHeaderValue(cardBody, 'ID')
+}
+
+// Look up a `<dt>{label}</dt><dd><span>{value}</span></dd>` pair by exact label.
+function extractHeaderValue(cardBody: string, label: string): string | null {
+    const needle = label.toLowerCase()
+    HEADER_TAG_RE.lastIndex = 0
+    let tag: RegExpExecArray | null
+    while((tag = HEADER_TAG_RE.exec(cardBody)) !== null) {
+        if(strip(tag[1]).toLowerCase() === needle) {
+            const value = strip(tag[2])
+            return value || null
+        }
+    }
+    return null
 }
 
 function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
