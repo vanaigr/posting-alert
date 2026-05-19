@@ -67,6 +67,7 @@ async function main() {
 
         const todayBegin = T.Now.instant().toZonedDateTimeISO(searchTimezone).startOfDay().toInstant().epochMilliseconds / 1000
 
+        // TODO: should join with sent messages to verify it belongs to the job message
         const reactions = db.select().from(Db.messageReactions)
             .where(D.gte(D.sql<number>`json_extract(${Db.messageReactions.data}, '$.date')`, todayBegin))
             .all()
@@ -323,6 +324,8 @@ async function main() {
                 db.insert(Db.companyBans)
                     .values({ companyName, reason })
                     .run()
+
+                await setMessageReaction(message.chat.id, message.message_id, '👍', log)
             }
             else {
                 log.W('Skipping unknown message')
@@ -410,6 +413,9 @@ function verifyInitData(log: L.Log, initData: string) {
 }
 
 
+export type Chat = {
+  id: number
+}
 type User = {
     id: number
     first_name: string
@@ -417,10 +423,10 @@ type User = {
     username?: string
 }
 type ReactionType = { type: 'emoji', emoji: string }
-| { type: 'custom_emoji', custom_emoji_id: string }
-| { type: 'paid' }
+    | { type: 'custom_emoji', custom_emoji_id: string }
+    | { type: 'paid' }
 type MessageReactionUpdated = {
-    //chat: Chat
+    chat: Chat
     message_id: number
     user?: User
     //actor_chat?: Chat
@@ -429,7 +435,7 @@ type MessageReactionUpdated = {
 }
 type Message = {
     message_id: number
-    //chat: Chat
+    chat: Chat
     from?: User
     date: number
     edit_date?: number
@@ -437,4 +443,29 @@ type Message = {
 
     text?: string
     caption?: string
+}
+
+export async function setMessageReaction(chatId: number, messageId: number, emoji: string, log: L.Log) {
+  const l = log.addedCtx('setMessageReaction(', [chatId], ', ', [messageId], ', ', [emoji], ')')
+
+  const result = await U.request<{ ok: boolean, description?: string }>({
+    url: new URL(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN!}/setMessageReaction`),
+    log: l,
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{
+        type: 'emoji',
+        emoji,
+      }],
+    }),
+  })
+  if(result.status !== 'ok') return false
+  if(!result.data.ok) {
+    l.E('Response error: ', [result.data.description])
+    return false
+  }
+  return true
 }
