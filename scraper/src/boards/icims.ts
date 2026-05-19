@@ -1,6 +1,6 @@
 import * as D from 'drizzle-orm'
 import { type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { Agent, interceptors, fetch as undiciFetch, Dispatcher } from 'undici'
+import { Agent, interceptors, fetch as undiciFetch, Dispatcher, type Response as UndiciResponse } from 'undici'
 import * as htmlparser2 from 'htmlparser2'
 import JSON5 from 'json5'
 
@@ -37,20 +37,19 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
 
     const connection = new Agent({}).compose(interceptors.dns())
 
+    const oneTimeQuota = 5
+    const maxQuota = 10
+
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
         rateLimit = false
-        while(companiesInProcess.size > 20) {
-            mainLog.I('Stalling because ', [companiesInProcess.size], ' is pending')
-            await U.delay(T.Now.instant().add({ seconds: 5 }))
-        }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
         sampler.count++
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess, ...Tier.bannedCompanies], {
-            quota: 1
+            quota: Math.min(Math.max(0, maxQuota - companiesInProcess.size), oneTimeQuota),
         })
 
         const jobsToCheckDetails = db.select()
@@ -120,36 +119,51 @@ async function checkCompany(
     company: D.InferSelectModel<typeof Company>,
     tier: string,
 ) {
-    const rawJobs: RawJob[] = []
-    let firstPageFailed = false
-    let notFound = false
 
-    for(let page = 0;; page++) {
-        const url = `https://${company.name}.icims.com/jobs/search?ss=1&pr=${page}&in_iframe=1`
-        const result = await request(log.addedCtx('page ', [page]), connection, url)
-        if(result.status === 'rate-limit') return result
+    const preliminaryResult = await (async(log) => {
+        const url = `https://${company.name}.icims.com/jobs/search?ss=1&pr=0&in_iframe=1&needsRedirect=false`
+        try {
+            const response = await undiciFetch(url)
+            if(response.status === 429) {
+                log.E('Rate limited')
+                await response.text().catch(() => {})
+                return U.status('rate-limit')
+            }
+            if(response.status === 404) {
+                await response.text().catch(err => err)
+                log.E('Not found')
+                return U.status('not-found')
+            }
+            if(response.status !== 200) {
+                log.E('Request failed: ', [response.status], ': ', [await response.text().catch(err => err)])
+                return U.status('error')
+            }
+            if(response.redirected) {
+                await response.text().catch(err => err)
+                log.E('Not found')
+                return U.status('not-found')
+            }
 
-        if(result.status === 'not-found' || (result.status === 'ok' && result.data.redirected)) {
-            notFound = true
-            break
+            await response.text().catch(() => {})
+            return U.result(
+                'ok',
+                response.headers.getSetCookie().map(it => it.slice(0, it.indexOf(';'))).join(';'),
+            )
         }
-
-        if(result.status !== 'ok') {
-            if(page === 0) firstPageFailed = true
-            break
+        catch(err) {
+            log.E([err])
+            return U.status('error')
         }
+    })(log.addedCtx('preliminary'))
 
-        const jobs = extractJobs(log, result.data.html)
-        if(!jobs) break
-        rawJobs.push(...jobs)
-    }
+    if(preliminaryResult.status === 'rate-limit') return preliminaryResult
 
     db.update(Company)
         .set({ checkedEpochMs: currentTime })
         .where(D.eq(Company.name, company.name))
         .run()
 
-    if(notFound) {
+    if(preliminaryResult.status === 'not-found') {
         log.I('Company does not exist')
 
         db.update(Company)
@@ -159,7 +173,7 @@ async function checkCompany(
         return U.status('ok')
     }
 
-    if(firstPageFailed) {
+    if(preliminaryResult.status === 'error') {
         const newFailCount = company.failCount + 1
         if(newFailCount >= 10 && company.exists === null) {
             log.I('Marking company inactive after ', [newFailCount], ' fetch fails')
@@ -175,6 +189,25 @@ async function checkCompany(
                 .run()
         }
         return U.status('ok')
+    }
+
+    const rawJobs: RawJob[] = []
+    for(let page = 0;; page++) {
+        log.I('Fetching page ', [page])
+        const result = await request(
+            log.addedCtx('page ', [page]),
+            `https://${company.name}.icims.com/jobs/search?ss=1&pr=${page}&in_iframe=1`,
+            (url) => undiciFetch(url, {
+                dispatcher: connection,
+                headers: { cookie: preliminaryResult.data },
+            }),
+        )
+        if(result.status === 'rate-limit') return result
+        if(result.status !== 'ok') break
+
+        const jobs = extractJobs(log, result.data.html)
+        if(!jobs) break
+        rawJobs.push(...jobs)
     }
 
     const initial = company.exists === null
@@ -268,7 +301,12 @@ async function processJobDetail(
 
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
-        const responseResult = await request(log, dispatcher, jobUrl + '?in_iframe=1', 3)
+        const responseResult = await request(
+            log,
+            jobUrl + '?in_iframe=1',
+            (url) => undiciFetch(url, { dispatcher }),
+            3,
+        )
         if(responseResult.status === 'ok') {
             const posting = extractJobPosting(log, responseResult.data.html)
             if(posting) {
@@ -362,19 +400,12 @@ function parseJobInfo(raw: RawJob): JobInfo {
     }
 }
 
-async function request(log0: L.Log, connection: Dispatcher | undefined, url: string, tries: number = 1) {
+async function request(log0: L.Log, url: string, fetch: (url: string) => Promise<UndiciResponse>, tries: number = 1) {
     for(let t = 0; t < tries; t++) {
         const log = t === 0 ? log0 : log0.addedCtx('try ', [t])
 
         try {
-            const response = await undiciFetch(url, {
-                dispatcher: connection,
-                headers: {
-                    "User-Agent": "Mozilla/5.0",
-                    Accept: 'text/html',
-                    cookie: 'JSESSIONID=52CC06587858D150719A333D72BB6355',
-                }
-            })
+            const response = await fetch(url)
 
             if(response.status === 429) {
                 log.E('Rate limited')
