@@ -163,9 +163,17 @@ async function checkCompany(
                     await C.sendMessage(
                         log.addedCtx('job ', [job.id]),
                         db,
-                        job.text + ' @ ' + company.name + '\n'
-                            + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
-                            + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
+                        {
+                            type: 'boardJob',
+                            board: 'applytojob',
+                            extra: {
+                                companyName: company.name,
+                                id: job.id,
+                            },
+                            message: job.text + ' @ ' + company.name + '\n'
+                                + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
+                                + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl),
+                        },
                     )
                 }
             })())

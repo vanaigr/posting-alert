@@ -301,9 +301,17 @@ async function processJobDetail(
         await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
-            jobInfo.title + ' @ ' + dbJob.companyName + '\n'
-                + jobInfo.locations.join(' | ') + '\n'
-                + `Rippling ${fetchDetails.companyTier} ${agoString}: ` + jobInfo.url,
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    companyName: dbJob.companyName,
+                    id: dbJob.id,
+                },
+                message: jobInfo.title + ' @ ' + dbJob.companyName + '\n'
+                    + jobInfo.locations.join(' | ') + '\n'
+                    + `Rippling ${fetchDetails.companyTier} ${agoString}: ` + jobInfo.url,
+            },
         )
     }
 

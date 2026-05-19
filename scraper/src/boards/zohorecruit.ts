@@ -289,10 +289,18 @@ async function processJobDetail(
         await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
-            job.title + ' @ ' + dbJob.companyName + '\n'
-                + workplaceType + ': ' + location + '\n'
-                + `Zoho ${fetchDetails.companyTier} < ${maxAgo} ago: `
-                + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    companyName: dbJob.companyName,
+                    id: dbJob.id,
+                },
+                message: job.title + ' @ ' + dbJob.companyName + '\n'
+                    + workplaceType + ': ' + location + '\n'
+                    + `Zoho ${fetchDetails.companyTier} < ${maxAgo} ago: `
+                    + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`,
+            },
         )
     }
 

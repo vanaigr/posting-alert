@@ -293,10 +293,18 @@ async function processJobDetail(
         await C.sendMessage(
             log.addedCtx('job ', [job.id]),
             db,
-            job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
-                + workplaceType + ': ' + location + '\n'
-                + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
-                + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    companyName: dbJob.companyName,
+                    id: dbJob.id,
+                },
+                message: job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
+                    + workplaceType + ': ' + location + '\n'
+                    + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
+                    + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`,
+            },
         )
     }
 

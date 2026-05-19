@@ -158,9 +158,17 @@ async function checkCompany(
                 promises.push(C.sendMessage(
                     log.addedCtx('job ', [id]),
                     db,
-                    jobInfo.title + ' @ ' + company.name + '\n'
-                        + locations.join(' | ') + '\n'
-                        + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${rawJob.extId}`,
+                    {
+                        type: 'boardJob',
+                        board: 'applytojob',
+                        extra: {
+                            companyName: company.name,
+                            id: id,
+                        },
+                        message: jobInfo.title + ' @ ' + company.name + '\n'
+                            + locations.join(' | ') + '\n'
+                            + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${id}`,
+                    },
                 ))
             }
         }

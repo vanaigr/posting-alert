@@ -291,10 +291,18 @@ async function processJobDetail(
         await C.sendMessage(
             log,
             db,
-            info.job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
-                + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
-                + `Ashby ${tier} < ${maxAgo} ago: `
-                + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    companyName: fetchRow.ashbyhq_job.companyName,
+                    id: fetchRow.ashbyhq_job.id,
+                },
+                message: info.job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
+                    + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
+                    + `Ashby ${tier} < ${maxAgo} ago: `
+                    + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
+            },
         )
     }
 

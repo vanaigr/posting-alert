@@ -250,10 +250,17 @@ async function processJobDetail(
         await C.sendMessage(
             log,
             db,
-            info.name + ' @ ' + info.company.name + '\n'
-                + remoteness + ': ' + location + '\n'
-                + `SR ${ago} (< ${maxAgo}) ago: `
-                + info.applyUrl,
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    id: fetchRow.smartrecruiters_job.id,
+                },
+                message: info.name + ' @ ' + info.company.name + '\n'
+                    + remoteness + ': ' + location + '\n'
+                    + `SR ${ago} (< ${maxAgo}) ago: `
+                    + info.applyUrl,
+            },
         )
     }
 

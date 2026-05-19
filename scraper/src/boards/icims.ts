@@ -358,9 +358,17 @@ async function processJobDetail(
         await C.sendMessage(
             log.addedCtx('job ', [dbJob.id]),
             db,
-            job.title + ' @ ' + dbJob.companyName + '\n'
-                + (job.location || 'none') + '\n'
-                + `Icims ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url,
+            {
+                type: 'boardJob',
+                board: 'applytojob',
+                extra: {
+                    companyName: dbJob.companyName,
+                    id: dbJob.id,
+                },
+                message: job.title + ' @ ' + dbJob.companyName + '\n'
+                    + (job.location || 'none') + '\n'
+                    + `Icims ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url,
+            },
         )
     }
 

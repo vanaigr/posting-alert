@@ -156,9 +156,17 @@ async function checkCompany(
                     await C.sendMessage(
                         log.addedCtx('job ', [id]),
                         db,
-                        job.title + ' @ ' + company.name + '\n'
-                            + (job.location?.name ?? '') + '\n'
-                            + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url,
+                        {
+                            type: 'boardJob',
+                            board: 'applytojob',
+                            extra: {
+                                companyName: company.name,
+                                id: id,
+                            },
+                            message: job.title + ' @ ' + company.name + '\n'
+                                + (job.location?.name ?? '') + '\n'
+                                + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url,
+                        },
                     )
                 }
             })())
