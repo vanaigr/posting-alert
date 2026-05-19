@@ -138,7 +138,7 @@ async function checkCompany(
             break
         }
 
-        const jobs = extractJobs(log, result.data.html)
+        const jobs = extractJobs(log.addedCtx('page ', [page]), result.data.html)
         if(!jobs) break
         rawJobs.push(...jobs)
     }
@@ -192,7 +192,11 @@ async function checkCompany(
         if(existingJobs.has(id)) continue
         existingJobs.add(id)
 
-        const jobInfo = parseJobInfo(rawJob)
+        const jobInfo: JobInfo = {
+            title: rawJob.title,
+            url: rawJob.url,
+            location: rawJob.location,
+        }
 
         const jobDesired = Tier.isJobDesired(jobInfo.title, undefined)
         const locationDesired = isLocationDesired(db, { info: jobInfo, longInfo: null })
@@ -201,7 +205,7 @@ async function checkCompany(
             companyName: company.name,
             id,
             fetchedEpochMs: currentTime,
-            info: JSON.stringify(rawJob),
+            info: JSON.stringify(jobInfo),
             longInfo: null,
             relevancy: JSON.stringify({
                 jr: Tier.isJobRelevant(jobInfo.title),
@@ -261,7 +265,7 @@ async function processJobDetail(
     fetchDetails: D.InferSelectModel<typeof FetchJobDetails>,
     dbJob: D.InferSelectModel<typeof Job>,
 ) {
-    const job = parseJobInfo(JSON.parse(dbJob.info) as RawJob)
+    const job = JSON.parse(dbJob.info) as JobInfo
 
     const jobUrl = `https://${dbJob.companyName}.icims.com/jobs/${dbJob.id}/job`
 
@@ -328,33 +332,16 @@ async function processJobDetail(
     db.delete(FetchJobDetails).where(D.eq(FetchJobDetails.uniqueId, fetchDetails.uniqueId)).run()
 }
 
-export type RawJob = {
-    id: string
-    href: string
-    title: string
-    location: string | null
-    postedDate: string | null
-    description: string | null
-    requisitionId: string | null
-    category: string | null
-}
-
 export type JobInfo = {
     title: string
     location: string
+    url: string
 }
 
 export type LongInfo = {
     description: string // html
-    url: string | null
     datePosted: string | null
-}
-
-function parseJobInfo(raw: RawJob): JobInfo {
-    return {
-        title: raw.title ?? '',
-        location: raw.location ?? '',
-    }
+    url: string | null
 }
 
 async function request(log0: L.Log, connection: Dispatcher | undefined, url: string, tries: number = 1) {
@@ -362,14 +349,7 @@ async function request(log0: L.Log, connection: Dispatcher | undefined, url: str
         const log = t === 0 ? log0 : log0.addedCtx('try ', [t])
 
         try {
-            const response = await undiciFetch(url, {
-                dispatcher: connection,
-                headers: {
-                    "User-Agent": "Mozilla/5.0",
-                    Accept: 'text/html',
-                    cookie: 'JSESSIONID=52CC06587858D150719A333D72BB6355',
-                }
-            })
+            const response = await undiciFetch(url, { dispatcher: connection })
 
             if(response.status === 429) {
                 log.E('Rate limited')
@@ -413,7 +393,7 @@ async function request(log0: L.Log, connection: Dispatcher | undefined, url: str
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
-    const info = parseJobInfo(JSON.parse(job.info) as RawJob)
+    const info = JSON.parse(job.info) as JobInfo
     const longInfo: LongInfo | null = JSON.parse(job.longInfo ?? 'null')
     if(isLocationRelevant(db, { info, longInfo })) {
         if(Tier.isJobRelevant(info.title)) return 1
@@ -438,143 +418,142 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
     })
 }
 
-// Each posting is one <li class="iCIMS_JobCardItem">…</li>. We match the whole
-// card so location, posted date and description (which sit OUTSIDE the anchor)
-// stay associated with the right job.
-const JOB_CARD_RE = /<li[^>]+class="[^"]*iCIMS_JobCardItem[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
-// Anchor inside a card — gives us href, id, and the <h3> title.
-const JOB_ANCHOR_RE = /<a[^>]+href="(https?:\/\/[^"]*?\/jobs\/(\d+)\/[^"]*?\/job[^"]*)"[^>]*class="[^"]*iCIMS_Anchor[^"]*"[^>]*>([\s\S]*?)<\/a>/i
-const TITLE_RE = /<h3[^>]*>([\s\S]*?)<\/h3>/i
-// `<span class="sr-only field-label">Job Locations</span> <span>VALUE</span>`
-const LOCATION_RE = /<span[^>]+class="[^"]*sr-only[^"]*field-label[^"]*"[^>]*>\s*Job Locations\s*<\/span>\s*<span[^>]*>\s*([^<]*?)\s*<\/span>/i
-// Posted-at: `<span title="5/6/2026 10:23 AM">3 hours ago…</span>`. The title
-// attribute is the absolute timestamp; we keep it as the raw string.
-const DATE_TITLE_RE = /<span[^>]+title="(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)"/i
-// Per-job header `<dt>{label}</dt> <dd><span>{value}</span></dd>` pairs.
-const HEADER_TAG_RE = /<dt[^>]*>([\s\S]*?)<\/dt>\s*<dd[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>/gi
-const DESC_RE = /<div[^>]+class="[^"]*col-xs-12[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i
-// iCIMS encodes locations as Country-State-City (e.g. "US-SC-Prosperity",
-// "CA-ON-Toronto"). We reverse to City, State, Country for readability and
-// consistency with the other boards — but only when the dash shape matches;
-// opaque strings ("Remote", "Multiple Locations") pass through unchanged.
-const DASH_LOC_RE = /^([A-Z]{2,3})-([A-Z0-9 ]{1,40})(?:-([^-].*))?$/
-
-function strip(html: string) {
-    return C.parseHtml(html)
+type RawJob = {
+    id: string
+    title: string
+    location: string
+    url: string
 }
 
-function htmlUnescape(s: string) {
-    return s
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#0*39;/g, "'")
-        .replace(/&#x0*27;/gi, "'")
-}
+function extractJobs(log: L.Log, html: string) {
+    let jobFound = 0
 
-function extractJobs(log: L.Log, html: string): RawJob[] | undefined {
+    let inTableDepth = 0
+    let inCardDepth = 0
+
+    let inLocationDepth = 0
+    let inLocationIgnoreDepth = 0
+    let locationParts: string[] = []
+
+    let inTitleDepth = 0
+    let inTitleIgnoreDepth = 0
+    let titleParts: string[] = []
+
+    let inTitleBlockDepth = 0
+
+    let url: string | undefined
+    let location: string | undefined
+    let title: string | undefined
+
     const jobs: RawJob[] = []
-    const seenInPage = new Set<string>()
 
-    JOB_CARD_RE.lastIndex = 0
-    let card: RegExpExecArray | null
-    while((card = JOB_CARD_RE.exec(html)) !== null) {
-        const body = card[1]
+    const parser = new htmlparser2.Parser({
+        onopentag(name, attribs) {
+            if(inTableDepth > 0) inTableDepth++
+            if(inCardDepth > 0) inCardDepth++
+            if(inLocationDepth > 0) inLocationDepth++
+            if(inLocationIgnoreDepth > 0) inLocationIgnoreDepth++
+            if(inTitleDepth > 0) inTitleDepth++
+            if(inTitleIgnoreDepth > 0) inTitleIgnoreDepth++
+            if(inTitleBlockDepth > 0) inTitleBlockDepth++
 
-        const anchor = JOB_ANCHOR_RE.exec(body)
-        if(anchor === null) continue
+            if(/\b(iCIMS_JobsTable)\b/.test(attribs.class)) {
+                inTableDepth++
+            }
 
-        const id = anchor[2]
-        // iCIMS sometimes renders multiple anchors per job (title + icon
-        // link); dedup within the page so cross-page logic gets clean input.
-        if(seenInPage.has(id)) continue
-        seenInPage.add(id)
+            if(inTableDepth > 0) {
+                if(/\b(iCIMS_JobCardItem)\b/.test(attribs.class)) {
+                    inCardDepth++
+                    jobFound++
+                }
+            }
 
-        const titleMatch = TITLE_RE.exec(anchor[3])
-        if(!titleMatch) continue
-        const title = strip(titleMatch[1])
-        if(!title) continue
+            if(inCardDepth > 0) {
+                if(inLocationDepth > 0) {
+                    if(/\b(field-label)\b/.test(attribs.class)) {
+                        inLocationIgnoreDepth++
+                    }
+                }
+                if(inTitleDepth > 0) {
+                    if(/\b(field-label)\b/.test(attribs.class)) {
+                        inTitleIgnoreDepth++
+                    }
+                }
 
-        jobs.push({
-            id,
-            href: htmlUnescape(anchor[1]),
-            title,
-            location: extractLocation(body),
-            postedDate: extractPostedAt(body),
-            description: extractDescription(body),
-            requisitionId: extractRequisitionId(body),
-            category: extractHeaderValue(body, 'Category'),
-        })
-    }
+                if(/\b(header)\b/.test(attribs.class) && /\b(left)\b/.test(attribs.class)) {
+                    inLocationDepth++
+                }
+                if(/\b(title)\b/.test(attribs.class)) {
+                    inTitleBlockDepth++
+                }
+                if(name === 'a' && /\b(iCIMS_Anchor)\b/.test(attribs.class)) {
+                    url = attribs.href
+                    inTitleDepth++
+                }
+            }
+        },
+        ontext(text) {
+            if(inLocationDepth > 0 && inLocationIgnoreDepth === 0) {
+                locationParts.push(text)
+            }
+            if(inTitleDepth > 0 && inTitleIgnoreDepth === 0) {
+                titleParts.push(text)
+            }
+        },
+        onclosetag(name) {
+            if(inTableDepth > 0) {
+                inTableDepth--
+            }
+            if(inCardDepth > 0) {
+                inCardDepth--
+                if(inCardDepth === 0) {
+                    if(title === undefined || location === undefined || url === undefined) {
+                        log.W('Could not parse job ', [jobFound])
+                    }
+                    else {
+                        const segments = new URL(url).pathname.split('/')
+                        if(segments[1] !== 'jobs' || !segments[2]) {
+                            log.W(
+                                'Could not extract id from ',
+                                [jobs.length],
+                                [[' ', [url]], 'extra-details'],
+                            )
+                        }
+                        else {
+                            jobs.push({
+                                title,
+                                location,
+                                url,
+                                id: segments[2],
+                            })
+                            title = location = url = undefined
+                        }
+                    }
+                }
+            }
+            if(inTitleBlockDepth > 0) inTitleBlockDepth--
+            if(inLocationIgnoreDepth > 0) inLocationIgnoreDepth--
+            if(inTitleIgnoreDepth > 0) inTitleIgnoreDepth--
+            if(inLocationDepth > 0) {
+                inLocationDepth--
+                if(inLocationDepth === 0) {
+                    location = locationParts.join('').trim()
+                    locationParts.length = 0
+                }
+            }
+            if(inTitleDepth > 0) {
+                inTitleDepth--
+                if(inTitleDepth === 0) {
+                    title = titleParts.join('').trim()
+                    titleParts.length = 0
+                }
+            }
+        },
+    })
+    parser.write(html)
+    parser.end()
 
-    if(jobs.length === 0) {
-        log.W('No job cards found on page')
-        return undefined
-    }
     return jobs
-}
-
-function normalizeLocation(raw: string) {
-    const match = DASH_LOC_RE.exec(raw)
-    if(!match) return raw
-    return [match[3], match[2], match[1]]
-        .filter((it): it is string => !!it && !!it.trim())
-        .map(it => it.trim())
-        .join(', ')
-}
-
-function extractLocation(cardBody: string): string | null {
-    const match = LOCATION_RE.exec(cardBody)
-    if(match) {
-        const raw = strip(match[1])
-        if(raw) return normalizeLocation(raw)
-    }
-    // Fall back to the per-job header tags (City / State / Country).
-    const parts: { city?: string, state?: string, country?: string } = {}
-    HEADER_TAG_RE.lastIndex = 0
-    let tag: RegExpExecArray | null
-    while((tag = HEADER_TAG_RE.exec(cardBody)) !== null) {
-        const label = strip(tag[1]).toLowerCase()
-        const value = strip(tag[2])
-        if(!value) continue
-        if(label.includes('city')) parts.city = value
-        else if(label.includes('state') || label.includes('province')) parts.state = value
-        else if(label.includes('country')) parts.country = value
-    }
-    const ordered = [parts.city, parts.state, parts.country]
-        .filter((it): it is string => !!it)
-    return ordered.length > 0 ? ordered.join(', ') : null
-}
-
-function extractPostedAt(cardBody: string): string | null {
-    const match = DATE_TITLE_RE.exec(cardBody)
-    return match ? match[1].trim() : null
-}
-
-function extractDescription(cardBody: string): string | null {
-    const match = DESC_RE.exec(cardBody)
-    if(!match) return null
-    const text = strip(match[1])
-    return text || null
-}
-
-function extractRequisitionId(cardBody: string): string | null {
-    return extractHeaderValue(cardBody, 'Requisition ID') ?? extractHeaderValue(cardBody, 'ID')
-}
-
-// Look up a `<dt>{label}</dt><dd><span>{value}</span></dd>` pair by exact label.
-function extractHeaderValue(cardBody: string, label: string): string | null {
-    const needle = label.toLowerCase()
-    HEADER_TAG_RE.lastIndex = 0
-    let tag: RegExpExecArray | null
-    while((tag = HEADER_TAG_RE.exec(cardBody)) !== null) {
-        if(strip(tag[1]).toLowerCase() === needle) {
-            const value = strip(tag[2])
-            return value || null
-        }
-    }
-    return null
 }
 
 function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
