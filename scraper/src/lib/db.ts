@@ -294,6 +294,10 @@ export const sentMessages = sqliteTable('sent_messages', {
     telegramMessage: text('telegram_message').notNull(),
 })
 
+export const messageReactions = sqliteTable('message_reactions', {
+    messageId: integer('message_id').primaryKey(),
+    data: text('data').notNull(),
+})
 
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
@@ -849,6 +853,17 @@ PRAGMA mmap_size = 268435456;
                 telegram_message TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 33`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 33) {
+            tx.run(sql`CREATE TABLE message_reactions (
+                message_id INTEGER PRIMARY KEY,
+                data TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 34`)
         }
     })
 }

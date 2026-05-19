@@ -10,6 +10,7 @@ import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
+import * as Db from './lib/db.ts'
 import * as Check from '../../scraper/src/check.ts'
 
 let mainLog: L.Log | undefined
@@ -19,6 +20,7 @@ let mainLog: L.Log | undefined
 const expectedUserId = process.env.TELEGRAM_USER_ID
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
 const allowedOrigin = process.env.ALLOWED_ORIGIN
+const telegramWebhookSecres = process.env.TELEGRAM_WEBHOOK_SECRET
 
 async function main() {
     const mainLog = L.makeLogger(process.env.LOG_PATH || undefined, undefined)
@@ -33,6 +35,7 @@ async function main() {
     if(!expectedUserId) throw new Error('expected user id is not provided')
     if(!telegramBotToken) throw new Error('expected bot id is not provided')
     if(!allowedOrigin) throw new Error('allowed origin id is not provided')
+    if(!telegramWebhookSecres) throw new Error('telegram webhook secret is not provided')
 
     const db = drizzle(new Database(process.env.DB_PATH!))
 
@@ -204,6 +207,35 @@ async function main() {
             log.I('Unknown type')
             return c.json({}, { status: 404 })
         }
+    })
+
+    app.post('/api/telegram', async(c) => {
+        const log = mainLog.addedCtx('/api/telegram')
+
+        const token = c.req.header('x-telegram-bot-api-secret-token')
+        if(token !== telegramWebhookSecres) {
+            log.W('Unexpected webhook token ', [token])
+            return new Response('', { status: 401 })
+        }
+
+        const body = await c.req.json()
+        log.I('Serving', [[' ', body], 'extra-details'])
+        if(body.message_reaction !== undefined) {
+            log.I('Handling reaction')
+            const reaction = body.message_reaction
+            db.insert(Db.messageReactions)
+                .values({ messageId: reaction.message_id, data: JSON.stringify(reaction) })
+                .onConflictDoUpdate({
+                    target: Db.messageReactions.messageId,
+                    set: { data: JSON.stringify(reaction) },
+                })
+                .run()
+        }
+        else {
+            log.W('Skipping update')
+        }
+
+        return c.json({})
     })
 
     serve(app, (info) => mainLog.I('Serving at ', [info.port]))
