@@ -175,7 +175,7 @@ async function checkCompany(
                             message: job.text + ' @ ' + company.name + '\n'
                                 + job.workplaceType + ': ' + job.categories.allLocations.join(' | ') + '\n'
                                 + `Lever ${tier} ${ago} (< ${maxAgo}) ago: ` + (job.hostedUrl || job.applyUrl)
-                                + (Tier.isRequiringClearance(job.text, description) ? '⚠️ clearance?' : '')
+                                + (Tier.isRequiringClearance(job.text, description) ? '\n⚠️ clearance?' : '')
                         },
                     )
                 }

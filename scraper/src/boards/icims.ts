@@ -368,7 +368,7 @@ async function processJobDetail(
                 message: job.title + ' @ ' + dbJob.companyName + '\n'
                     + (job.location || 'none') + '\n'
                     + `Icims ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url
-                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
+                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

@@ -303,7 +303,7 @@ async function processJobDetail(
                     + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
                     + `Ashby ${tier} < ${maxAgo} ago: `
                     + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
-                    + (Tier.isRequiringClearance(info.job.title, longInfo.descriptionHtml ? C.parseHtml(longInfo.descriptionHtml) : undefined) ? '⚠️ clearance?' : '')
+                    + (Tier.isRequiringClearance(info.job.title, longInfo.descriptionHtml ? C.parseHtml(longInfo.descriptionHtml) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

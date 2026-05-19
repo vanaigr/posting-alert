@@ -263,7 +263,7 @@ async function processJobDetail(
                     + remoteness + ': ' + location + '\n'
                     + `SR ${ago} (< ${maxAgo}) ago: `
                     + info.applyUrl
-                    + (Tier.isRequiringClearance(info.name, getDescription(longInfo.description)) ? '⚠️ clearance?' : '')
+                    + (Tier.isRequiringClearance(info.name, getDescription(longInfo.description)) ? '\n⚠️ clearance?' : '')
             },
         )
     }

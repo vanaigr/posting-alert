@@ -306,7 +306,7 @@ async function processJobDetail(
                     + workplaceType + ': ' + location + '\n'
                     + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
                     + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`
-                    + (Tier.isRequiringClearance(job.jobOpeningName, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
+                    + (Tier.isRequiringClearance(job.jobOpeningName, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

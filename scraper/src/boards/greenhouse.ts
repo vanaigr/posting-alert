@@ -167,7 +167,7 @@ async function checkCompany(
                             message: job.title + ' @ ' + company.name + '\n'
                                 + (job.location?.name ?? '') + '\n'
                                 + `GH ${tier} ${ago} (< ${maxAgo}) ago: ` + job.absolute_url
-                                + (Tier.isRequiringClearance(job.title, description) ? '⚠️ clearance?' : '')
+                                + (Tier.isRequiringClearance(job.title, description) ? '\n⚠️ clearance?' : '')
                         },
                     )
                 }

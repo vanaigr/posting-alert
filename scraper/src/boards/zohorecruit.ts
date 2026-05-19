@@ -300,7 +300,7 @@ async function processJobDetail(
                     + workplaceType + ': ' + location + '\n'
                     + `Zoho ${fetchDetails.companyTier} < ${maxAgo} ago: `
                     + `https://${dbJob.companyName}.zohorecruit.com/jobs/Careers/${encodeURIComponent(dbJob.id)}`
-                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '⚠️ clearance?' : '')
+                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }
