@@ -259,7 +259,7 @@ async function processJobDetail(
                 extra: {
                     id: fetchRow.smartrecruiters_job.id,
                 },
-                message: info.name + ' @ ' + info.company.name + '\n'
+                message: info.name + ' @ ' + info.company.identifier + '\n'
                     + remoteness + ': ' + location + '\n'
                     + `SR ${ago} (< ${maxAgo}) ago: `
                     + info.applyUrl
