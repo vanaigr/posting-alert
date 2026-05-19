@@ -34,6 +34,8 @@ for(const url of urls1) {
     addUrl(url)
 }
 
+companies.add('porter')
+
 console.log('Found', companies.size, 'companies')
 
 fs.writeFileSync(
