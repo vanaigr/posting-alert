@@ -297,7 +297,7 @@ async function processJobDetail(
         const maxAgo = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
 
         await C.sendMessage(
-            log.addedCtx('job ', [dbJob.id]),
+            log,
             db,
             {
                 type: 'boardJob',
@@ -497,17 +497,34 @@ function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
     let capturing = false
     let parts: string[] = []
 
+    let descriptionBegin: number | undefined
+    let descriptionEnd: number | undefined
+    let inDescriptionDepth = 0
+
     const parser = new htmlparser2.Parser({
         onopentag(name, attribs) {
+            if(inDescriptionDepth > 0) {
+                inDescriptionDepth++
+            }
+
             if(name === 'script' && attribs.type === 'application/ld+json') {
                 capturing = true
                 parts = []
+            }
+            if(/\b(job_description)\b/.test(attribs.class)) {
+                inDescriptionDepth++
+                if(descriptionBegin === undefined) descriptionBegin = parser.endIndex
             }
         },
         ontext(text) {
             if(capturing) parts.push(text)
         },
         onclosetag(name) {
+            if(inDescriptionDepth > 0) {
+                inDescriptionDepth--
+                if(inDescriptionDepth === 0) descriptionEnd = parser.startIndex
+            }
+
             if(name === 'script' && capturing) {
                 scripts.push(parts.join(''))
                 capturing = false
@@ -539,6 +556,18 @@ function extractJobPosting(log: L.Log, html: string): LongInfo | undefined {
         }
     }
 
-    log.I('Did not find JobPosting ld+json', [[' ', [html]], 'extra-details'])
+    log.I('Did not find JobPosting ld+json. Falling back to description only', [[' ', [html]], 'extra-details'])
+
+    if(descriptionBegin !== undefined && descriptionEnd !== undefined) {
+        return {
+            description: html.substring(descriptionBegin, descriptionEnd),
+            url: null,
+            locationRequirements: null,
+        }
+    }
+    else {
+        log.I('Did not find description as well')
+    }
+
     return
 }
