@@ -339,14 +339,25 @@ type GetCompaniesToCheckReturn<T extends AnyCompanyTable> = {
     other: ReturnType<typeof typescript1<T>>
 }
 
+const bannedCompanies = [
+    'jobgether',
+    'g2i',
+    'brightvisiontechnologies',
+]
+
+function getCompaniesToSkip() {
+    return [...bannedCompanies]
+}
+
 export function getCompaniesToCheck<T extends AnyCompanyTable>(
     db: BetterSQLite3Database,
     Company: T,
-    companiesToSkip: string[],
+    companiesInProgress: string[],
     options?: { quota?: number, weights?: [number, number] }
 ): GetCompaniesToCheckReturn<T> {
     const quota = options?.quota ?? 5
     const weights = options?.weights ?? [0.5, 0.25]
+    const companiesToSkip = [...companiesInProgress, ...getCompaniesToSkip()]
 
     const overnightInfo = getOvernightInfo()
     if(overnightInfo.isOvernight) {

@@ -209,6 +209,7 @@ async function main() {
         }
     })
 
+
     app.post('/api/telegram', async(c) => {
         const log = mainLog.addedCtx('/api/telegram')
 
@@ -218,11 +219,47 @@ async function main() {
             return new Response('', { status: 401 })
         }
 
+        type User = {
+            id: number
+            first_name: string
+            last_name?: string
+            username?: string
+        }
+        type ReactionType = { type: 'emoji', emoji: string }
+            | { type: 'custom_emoji', custom_emoji_id: string }
+            | { type: 'paid' }
+        type MessageReactionUpdated = {
+            //chat: Chat
+            message_id: number
+            user?: User
+            //actor_chat?: Chat
+            date: number
+            new_reaction: ReactionType[]
+        }
+        type Message = {
+            message_id: number
+            //chat: Chat
+            from?: User
+            date: number
+            edit_date?: number
+            reply_to_message?: Message
+
+            text?: string
+            caption?: string
+        }
+
         const body = await c.req.json()
         log.I('Serving', [[' ', body], 'extra-details'])
         if(body.message_reaction !== undefined) {
             log.I('Handling reaction')
-            const reaction = body.message_reaction
+            const reaction = body.message_reaction as MessageReactionUpdated
+
+            if(String(reaction.user?.id) !== expectedUserId) {
+                log.E('Unexpected user for ', [reaction])
+                // NOTE: Auth error, but the message itself is handled successfully
+                return c.json({})
+            }
+
             db.insert(Db.messageReactions)
                 .values({ messageId: reaction.message_id, data: JSON.stringify(reaction) })
                 .onConflictDoUpdate({
@@ -230,6 +267,44 @@ async function main() {
                     set: { data: JSON.stringify(reaction) },
                 })
                 .run()
+        }
+        else if(body.message !== undefined) {
+            const message = body.message as Message
+
+            if(String(message.from?.id) !== expectedUserId) {
+                log.E('Unexpected user for ', [message])
+                // NOTE: Auth error, but the message itself is handled successfully
+                return c.json({})
+            }
+
+            const text = message.text ?? ''
+            const command = '/ban'
+            if(text.startsWith(command)) {
+                log.I('Handling /ban')
+                const rest = text.slice(command.length)
+                const nlIndex = rest.indexOf('\n')
+
+                let companyName: string
+                let reason: string
+                if(nlIndex === -1) {
+                    companyName = rest
+                    reason = ''
+                }
+                else {
+                    companyName = rest.slice(0, nlIndex)
+                    reason = rest.slice(nlIndex + 1)
+                }
+
+                companyName = companyName.trim()
+                reason = reason.trim()
+
+                db.insert(Db.companyBans)
+                    .values({ companyName, reason })
+                    .run()
+            }
+            else {
+                log.W('Skipping unknown message')
+            }
         }
         else {
             log.W('Skipping update')

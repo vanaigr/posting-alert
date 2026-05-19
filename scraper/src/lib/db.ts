@@ -299,6 +299,11 @@ export const messageReactions = sqliteTable('message_reactions', {
     data: text('data').notNull(),
 })
 
+export const companyBans = sqliteTable('company_bans', {
+    companyName: text('company_name').primaryKey(),
+    reason: text('reason').notNull(),
+})
+
 export function migrate(db: BetterSQLite3Database) {
     db.transaction((tx) => {
         const version = dbVersion(tx)
@@ -864,6 +869,17 @@ PRAGMA mmap_size = 268435456;
                 data TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 34`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 34) {
+            tx.run(sql`CREATE TABLE company_bans (
+                company_name TEXT PRIMARY KEY,
+                reason TEXT NOT NULL
+            )`)
+            tx.run(sql`PRAGMA user_version = 35`)
         }
     })
 }
