@@ -17,8 +17,8 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
     const jobsInProgress = new Set<string>()
     let rateLimit = false
 
-    const apiConnection = N.createConnection('https://api.smartrecruiters.com', { connections: 1 })
-    const jobsConnection = N.createConnection('https://jobs.smartrecruiters.com', { connections: 1 })
+    const apiConnection = N.createConnection('https://api.smartrecruiters.com')
+    const jobsConnection = N.createConnection('https://jobs.smartrecruiters.com')
 
     while(true) {
         if(rateLimit) await U.delay(T.Now.instant().add({ seconds: 5 }))
