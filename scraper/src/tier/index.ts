@@ -26,6 +26,7 @@ export const citiesStatesRegex2 = new RegExp(
 
 const cityStateRegexPart = `([a-zÀ-ÿ .'\\-]+,\\s+(${[...states, ...stateCodes].map(U.regexEscape).join('|')}))`
 
+// NOTE: occasionaly matches unrelated places e.g. "Berlin, DE" (because DE is a state code).
 export const citiesStatesRegex3 = new RegExp(
     `^(${cityStateRegexPart}|.+,\\s+${cityStateRegexPart},\\s+\\d+)$`,
     'i'
