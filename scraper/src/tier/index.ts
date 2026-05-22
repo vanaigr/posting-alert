@@ -43,7 +43,7 @@ export function isJobRelevant(title: string) {
 }
 
 export function isJobDesired(title: string, description: string | undefined) {
-    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality|quality assurance|machine learning|head of|vp of|servicenow|salesforce|forward deployed|drupal|sharepoint)\b/i.test(title)
+    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality|quality assurance|machine learning|head of|vp of|servicenow|salesforce|forward deployed|drupal|sharepoint|shopify)\b/i.test(title)
         || /\b(UX)\b/.test(title)
     if(ignoreTitle) return false
 
