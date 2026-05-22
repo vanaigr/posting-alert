@@ -15,11 +15,13 @@ type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<
 export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany
     | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany | typeof Db.gemCompany
     | typeof Db.ripplingCompany | typeof Db.applytojobCompany | typeof Db.icimsCompany
+    | typeof Db.workforcenowCompany
 export type AnyComany = InferTable<AnyCompanyTable>
 
 export type AnyJobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob
     | typeof Db.bamboohrJob | typeof Db.zohorecruitJob | typeof Db.gemJob
     | typeof Db.ripplingJob | typeof Db.applytojobJob | typeof Db.icimsJob
+    | typeof Db.workforcenowJob
 export type AnyJob = InferTable<AnyJobTable>
 
 
@@ -216,6 +218,8 @@ export class SampleSaver {
 }
 
 export function millisecToDurationString(ms: number) {
+    if(isNaN(ms)) return 'N/A'
+
     const sec = ms / 1000
 
     if(sec < 0) return 'error'
@@ -427,13 +431,13 @@ export function populateCompanies<T extends AnyCompanyTable>(
     log: L.Log,
     db: BetterSQLite3Database,
     Company: T,
-    companyNames: string[],
+    companyIds: string[],
     // NOTE: typescript language server goes crazy if this is insert model
     // it says property does not exist in the type where it exists. tsc reports no errors.
     baseCompanyRecord: Omit<D.InferSelectModel<T>, 'name'>,
 ) {
-    for(let i = 0; i < companyNames.length; i += 3000) {
-        const toInsert = companyNames.slice(i, i + 3000).map(it => ({ ...baseCompanyRecord, name: it }))
+    for(let i = 0; i < companyIds.length; i += 3000) {
+        const toInsert = companyIds.slice(i, i + 3000).map(it => ({ ...baseCompanyRecord, name: it }))
 
         db.insert(Company)
             .values(toInsert as any)

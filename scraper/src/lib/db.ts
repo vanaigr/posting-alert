@@ -271,6 +271,40 @@ export const smartrecruitersFetchJobDetails = sqliteTable('smartrecruiters_fetch
 })
 
 
+export const workforcenowCompany = sqliteTable('workforcenow_company', {
+    name: text('name').primaryKey(),
+    humanName: text('human_name'),
+    checkedEpochMs: integer('checked_epoch_ms'),
+    exists: integer('exists'),
+    failCount: integer('fail_count').notNull(),
+    tier: integer('tier').notNull(),
+})
+
+export const workforcenowJob = sqliteTable(
+    'workforcenow_job',
+    {
+        companyName: text('company_name').notNull(),
+        id: text('id').notNull(),
+        fetchedEpochMs: integer('fetched_epoch_ms').notNull(),
+        info: text('info').notNull(),
+        longInfo: text('long_info'),
+        relevancy: text('relevancy').notNull(),
+    },
+    table => [
+        primaryKey({ columns: [table.companyName, table.id] }),
+    ],
+)
+
+export const workforcenowFetchJobDetails = sqliteTable('workforcenow_fetch_job_details', {
+    uniqueId: text('unique_id').primaryKey(),
+    companyName: text('company_name').notNull(),
+    id: text('id').notNull(),
+    addedAt: integer('added_at').notNull(),
+    jobPostedAfter: integer('job_posted_after').notNull(),
+    companyTier: text('company_tier').notNull(),
+})
+
+
 export const pendingNotification = sqliteTable('pending_notification', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     data: text('data').notNull(),
@@ -880,6 +914,46 @@ PRAGMA mmap_size = 268435456;
                 reason TEXT NOT NULL
             )`)
             tx.run(sql`PRAGMA user_version = 35`)
+        }
+    })
+
+    db.transaction((tx) => {
+        const version = dbVersion(tx)
+        if (version === 35) {
+            tx.run(sql`
+create table workforcenow_company(
+    name TEXT PRIMARY KEY,
+    human_name TEXT,
+    checked_epoch_ms INTEGER,
+    "exists" INTEGER,
+    fail_count INTEGER NOT NULL,
+    tier INTEGER NOT NULL
+)
+            `)
+            tx.run(sql`
+create table workforcenow_job(
+    company_name TEXT NOT NULL,
+    id TEXT NOT NULL,
+    fetched_epoch_ms INTEGER NOT NULL,
+    info TEXT NOT NULL,
+    long_info TEXT,
+    relevancy TEXT NOT NULL,
+    PRIMARY KEY(company_name, id)
+)
+            `)
+            tx.run(sql`
+create table workforcenow_fetch_job_details(
+    unique_id TEXT PRIMARY KEY,
+    company_name TEXT NOT NULL,
+    id TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    job_posted_after INTEGER NOT NULL,
+    company_tier INTEGER NOT NULL
+)
+            `)
+            tx.run(sql`CREATE INDEX workforcenow_company_tier_checked_idx ON icims_company(tier, checked_epoch_ms)`)
+
+            tx.run(sql`PRAGMA user_version = 36`)
         }
     })
 }
