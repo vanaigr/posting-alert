@@ -54,12 +54,10 @@ export function isJobDesired(title: string, description: string | undefined) {
         if(!descriptionDesired) return false
     }
 
-    /*
     if(description) {
         const years = getYearsOfExperience(description)
-        if(years > 5) return false
+        if(years >= 4) return false
     }
-    */
 
     return true
 }
@@ -115,8 +113,8 @@ export function isLocationDesired(db: BetterSQLite3Database, location: string, e
     const isRemoteWorldwide = location.toLowerCase() === 'remote'
     if(isRemoteWorldwide) return true
 
-    //const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
-    //if(isRemote) {
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    if(isRemote) {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
         if(mentionsUs) return true
 
@@ -127,7 +125,7 @@ export function isLocationDesired(db: BetterSQLite3Database, location: string, e
         if(mayBeUs) {
             if(C.isLocationInUs(db, location)) return true
         }
-    //}
+    }
 
     return false
 }
@@ -137,8 +135,8 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
     const isRemoteWorldwide = location.toLowerCase() === 'remote'
     if(isRemoteWorldwide) return true
 
-    //const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
-    //if(isRemote) {
+    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    if(isRemote) {
         const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
         if(mentionsUs) return true
 
@@ -149,7 +147,7 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
         if(mayBeUs) {
             if(await C.isLocationInUsFull(log, db, location)) return true
         }
-    //}
+    }
 
     return false
 }

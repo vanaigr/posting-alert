@@ -272,8 +272,6 @@ export function isLocationRelevant(info: JobInfo) {
 }
 
 export function isLocationDesired(info: JobInfo) {
-    return isLocationRelevant(info)
-    /*
     return info.locations.some(it => {
         const isInUs = it.isoCountry === 'USA'
         const isRemote = it.isRemote || /(remote|nationwide|continental)/i.test(info.title)
@@ -283,5 +281,4 @@ export function isLocationDesired(info: JobInfo) {
 
         return isMyLocal || isRemoteInUs || isRemoteWorldwide
     })
-    */
 }
