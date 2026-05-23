@@ -9,6 +9,8 @@ import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
 
+// Mostly copied from: https://github.com/kalil0321/ats-scrapers/blob/71d9a560a00071938a0ee0827d1e23badc104e93/src/jobhive/scrapers/oracle.py#L238
+
 const { oraclecloudCompany: Company, oraclecloudJob: Job, oraclecloudFetchJobDetails: FetchJobDetails } = Db
 
 export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.Sampler) {
