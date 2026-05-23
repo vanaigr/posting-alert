@@ -15,13 +15,13 @@ type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<
 export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany
     | typeof Db.bamboohrCompany | typeof Db.zohorecruitCompany | typeof Db.gemCompany
     | typeof Db.ripplingCompany | typeof Db.applytojobCompany | typeof Db.icimsCompany
-    | typeof Db.workforcenowCompany
+    | typeof Db.workforcenowCompany | typeof Db.oraclecloudCompany
 export type AnyComany = InferTable<AnyCompanyTable>
 
 export type AnyJobTable = typeof Db.aJob | typeof Db.lJob | typeof Db.gJob
     | typeof Db.bamboohrJob | typeof Db.zohorecruitJob | typeof Db.gemJob
     | typeof Db.ripplingJob | typeof Db.applytojobJob | typeof Db.icimsJob
-    | typeof Db.workforcenowJob
+    | typeof Db.workforcenowJob | typeof Db.oraclecloudJob
 export type AnyJob = InferTable<AnyJobTable>
 
 

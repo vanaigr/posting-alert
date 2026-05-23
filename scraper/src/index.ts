@@ -17,6 +17,7 @@ import * as Applytojob from './boards/applytojob.ts'
 import * as Smartrecruiters from './boards/smartrecruiters.ts'
 import * as Icims from './boards/icims.ts'
 import * as Workforcenow from './boards/workforcenow.ts'
+import * as Oraclecloud from './boards/oraclecloud.ts'
 
 let mainLog: L.Log | undefined
 
@@ -53,6 +54,7 @@ async function main() {
         Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
         Icims.run(db, mainLog.addedCtx('icims'), sampleSaver),
         Workforcenow.run(db, mainLog.addedCtx('workforcenow'), sampleSaver.createSampler('workforcenow')),
+        Oraclecloud.run(db, mainLog.addedCtx('oraclecloud'), sampleSaver.createSampler('oraclecloud')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')
