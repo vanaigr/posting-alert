@@ -11,12 +11,9 @@ import * as C from '../lib/common.ts'
 
 const { oraclecloudCompany: Company, oraclecloudJob: Job, oraclecloudFetchJobDetails: FetchJobDetails } = Db
 
-const SITE_NUMBER = 'CX_1'
-const PAGE_LIMIT = 200
-
 export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.Sampler) {
     await import('../sources/oraclecloud/companies.json', { with: { type: 'json' } }).then(it => {
-        populateOraclecloudCompanies(mainLog, db, it.default as [string, string][])
+        populateOraclecloudCompanies(mainLog, db, it.default)
     })
     C.initTierEvaluation(mainLog, db, Company, Job, calculateTier)
 
@@ -65,7 +62,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.
 
         const currentTime = Date.now()
         const handleCompany = async(company: D.InferSelectModel<typeof Company>, tier: string) => {
-            const log = mainLog.addedCtx([company.subdomain], '/', [company.region])
+            const log = mainLog.addedCtx([company.subdomain], ', ', [company.region])
 
             try {
                 companiesInProcess.add(company.name)
@@ -105,16 +102,17 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.
     }
 }
 
-function baseUrl(subdomain: string, region: string) {
+function makeBaseUrl(subdomain: string, region: string) {
     return new URL(`https://${subdomain}.fa.${region}.oraclecloud.com`)
 }
 
-function populateOraclecloudCompanies(log: L.Log, db: BetterSQLite3Database, pairs: [string, string][]) {
+function populateOraclecloudCompanies(log: L.Log, db: BetterSQLite3Database, pairs: string[][]) {
     for(let i = 0; i < pairs.length; i += 3000) {
-        const toInsert = pairs.slice(i, i + 3000).map(([subdomain, region]) => ({
-            name: U.getHash(subdomain, region),
+        const toInsert = pairs.slice(i, i + 3000).map(([subdomain, region, cx]) => ({
+            name: U.getHash(subdomain, region, cx),
             subdomain,
             region,
+            cx,
             humanName: null,
             checkedEpochMs: null,
             exists: null,
@@ -134,12 +132,16 @@ async function checkCompany(
     company: D.InferSelectModel<typeof Company>,
     tier: string,
 ) {
-    const base = baseUrl(company.subdomain, company.region)
+    const pageLimit = 200
+    const baseUrl = makeBaseUrl(company.subdomain, company.region)
 
     const preliminaryResult = await request<SiteSettingsResponse>(
         log.addedCtx('settings'),
         dispatcher,
-        `${base}/hcmRestApi/CandidateExperience/en/siteSettings/${SITE_NUMBER}`,
+        new URL(
+            `hcmRestApi/CandidateExperience/en/siteSettings/${company.cx}`,
+            baseUrl,
+        ).toString(),
     )
 
     if(preliminaryResult.status === 'rate-limit') return preliminaryResult
@@ -185,12 +187,16 @@ async function checkCompany(
     for(let offset = 0;;) {
         log.I('Fetching at ', [offset])
 
-        const url = `${base}/hcmRestApi/resources/latest/recruitingCEJobRequisitions`
-            + `?onlyData=true`
-            + `&expand=requisitionList`
-            + `&finder=${encodeURIComponent(`findReqs;siteNumber=${SITE_NUMBER},limit=${PAGE_LIMIT},offset=${offset}`)}`
+        const url = new URL('hcmRestApi/resources/latest/recruitingCEJobRequisitions', baseUrl)
+        url.searchParams.set('onlyData', 'true') // chesterton's fence
+        url.searchParams.set('expand', 'requisitionList')
+        url.searchParams.set(
+            'finder',
+            // siteNumber is chesterton's fence as well
+            `findReqs;siteNumber=${company.cx},limit=${pageLimit},offset=${offset}`,
+        )
 
-        const result = await request<JobsResponse>(log.addedCtx('offset ', [offset]), dispatcher, url)
+        const result = await request<JobsResponse>(log.addedCtx('offset ', [offset]), dispatcher, url.toString())
         if(result.status === 'rate-limit') return result
         if(result.status !== 'ok') break
 
@@ -214,15 +220,16 @@ async function checkCompany(
     const toInsert: D.InferSelectModel<typeof Job>[] = []
     const toEnqueueDetails: D.InferSelectModel<typeof FetchJobDetails>[] = []
     for(const rawJob of rawJobs) {
-        const idRaw = rawJob.Id ?? rawJob.RequisitionNumber
-        if(idRaw === undefined || idRaw === null) continue
-        const id = String(idRaw)
+        const id = rawJob.Id
         if(!id || existingJobs.has(id)) continue
         existingJobs.add(id)
 
         const jobInfo: JobInfo = {
             title: rawJob.Title ?? '',
-            location: rawJob.PrimaryLocation ?? '',
+            locations: [
+                { name: rawJob.PrimaryLocation ?? '', country: rawJob.PrimaryLocationCountry ?? '' },
+                ...(rawJob.secondaryLocations ?? []).map(it => ({ name: it.Name ?? '', country: it.CountryCode ?? '' }))
+            ],
         }
 
         const jobDesired = Tier.isJobDesired(jobInfo.title, undefined)
@@ -294,16 +301,16 @@ async function processJobDetail(
     dbCompany: D.InferSelectModel<typeof Company>,
 ) {
     const info = JSON.parse(dbJob.info) as JobInfo
-    const base = baseUrl(dbCompany.subdomain, dbCompany.region)
+    const baseUrl = makeBaseUrl(dbCompany.subdomain, dbCompany.region)
 
     if(dbJob.longInfo === null) {
         log.I('Fetching job info')
 
-        const url = `${base}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails`
-            + `?onlyData=true`
-            + `&finder=${encodeURIComponent(`ById;Id=${fetchDetails.id}`)}`
+        const url = new URL('hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails', baseUrl)
+        url.searchParams.set('onlyData', 'true')
+        url.searchParams.set('finder', `ById;Id=${fetchDetails.id}`)
 
-        const responseResult = await request<JobDetailsResponse>(log, dispatcher, url, 3)
+        const responseResult = await request<JobDetailsResponse>(log, dispatcher, url.toString(), 3)
         if(responseResult.status === 'ok') {
             const detail = responseResult.data.items?.[0]
             const description = [
@@ -352,9 +359,11 @@ async function processJobDetail(
     }
 
     if(shouldSend) {
-        const url = `${base}/?keyword=&mode=jobs&lang=en&site_number=${SITE_NUMBER}#${fetchDetails.id}`
+        const urlUrl = new URL('hcmUI/CandidateExperience/en/sites/CX_1/job/' + encodeURIComponent(fetchDetails.id), baseUrl)
+        const url = urlUrl.toString()
 
         const maxAgo = C.millisecToDurationString(Date.now() - (fetchDetails.jobPostedAfter ?? 0))
+        const location = infoToLocation(info)
 
         await C.sendMessage(
             log,
@@ -367,7 +376,7 @@ async function processJobDetail(
                     id: dbJob.id,
                 },
                 message: info.title + ' @ ' + (dbCompany.humanName || `${dbCompany.subdomain}/${dbCompany.region}`) + '\n'
-                    + (info.location || 'none') + '\n'
+                    + location + '\n'
                     + `Oracle ${fetchDetails.companyTier} (< ${maxAgo}) ago: ` + url
                     + (Tier.isRequiringClearance(info.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
@@ -403,8 +412,13 @@ async function request<R>(log0: L.Log, dispatcher: Dispatcher, url: string, trie
                 continue
             }
 
-            const json = await response.json() as R
-            return U.result('ok', json)
+            const jsonResult = await response.json().then(
+                it => U.result('ok', it as R),
+                err => U.result('error', err),
+            )
+            if(jsonResult.status !== 'ok') return U.status('not-found')
+
+            return jsonResult
         }
         catch(err) {
             log.E('While requesting: ', [err])
@@ -432,7 +446,7 @@ function unwrap(payload: JobsResponse): { items: RawJob[], total: number | undef
 
 export type JobInfo = {
     title: string
-    location: string
+    locations: { name: string, country: string }[]
 }
 
 export type LongInfo = {
@@ -459,12 +473,17 @@ type JobDetailsResponse = {
 }
 
 type RawJob = {
-    Id?: string | number
-    RequisitionNumber?: string
+    Id?: string
+    //RequisitionNumber?: string
     Title?: string
-    PostedDate?: string
-    CreatedOn?: string
+    //PostedDate?: string
+    //CreatedOn?: string
     PrimaryLocation?: string
+    PrimaryLocationCountry?: string
+    secondaryLocations?: Array<{
+        CountryCode?: string
+        Name?: string
+    }>
 }
 
 function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof Job>) {
@@ -478,17 +497,27 @@ function calculateTier(db: BetterSQLite3Database, job: D.InferSelectModel<typeof
 }
 
 export function isLocationRelevant(db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
-    return Tier.isLocationRelevant(db, job.info.location, {
+    return Tier.isLocationRelevant(db, infoToLocation(job.info), {
+        mentionsUs: checkMentionsUs(job.info),
         remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
     })
 }
 export function isLocationDesired(db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
-    return Tier.isLocationDesired(db, job.info.location, {
+    return Tier.isLocationDesired(db, infoToLocation(job.info), {
+        mentionsUs: checkMentionsUs(job.info),
         remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
     })
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, job: { info: JobInfo, longInfo?: LongInfo | null }) {
-    return await Tier.isLocationDesiredFull(log, db, job.info.location, {
+    return await Tier.isLocationDesiredFull(log, db, infoToLocation(job.info), {
+        mentionsUs: checkMentionsUs(job.info),
         remote: !job.longInfo?.description || /(?<!not )(?<!not a )\bremote/i.test(job.longInfo?.description),
     })
+}
+
+function infoToLocation(info: JobInfo) {
+    return info.locations.map(it => it.name).join(' | ')
+}
+function checkMentionsUs(info: JobInfo) {
+    return info.locations.some(it => it.country === 'US')
 }
