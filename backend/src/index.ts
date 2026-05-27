@@ -301,7 +301,7 @@ async function main() {
             }
 
             const text = message.text ?? ''
-            const command = '/ban'
+            const command = '/ban '
             if(text.startsWith(command)) {
                 log.I('Handling /ban')
                 const rest = text.slice(command.length)
