@@ -10,6 +10,7 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 // Half taken from here: https://github.com/kalil0321/ats-scrapers
 
@@ -19,8 +20,7 @@ import * as C from '../lib/common.ts'
 
 const { icimsCompany: Company, icimsJob: Job, icimsFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
-    const sampler = sampleSaver.createSampler('icims')
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
     await import('../sources/icims/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, {
             checkedEpochMs: null,
@@ -45,7 +45,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         rateLimit = false
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess], {

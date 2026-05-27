@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as Db from './lib/db.ts'
 import * as L from './lib/log.ts'
 import * as C from './lib/common.ts'
+import * as A from './lib/analytics.ts'
 import * as Ashbyhq from './boards/ashbyhq.ts'
 import * as Lever from './boards/lever.ts'
 import * as Greenhouse from './boards/greenhouse.ts'
@@ -34,27 +35,40 @@ async function main() {
         mainLog.E('Unhandled rejection from ', [promise], ': ', [reason])
     })
 
-    const db = drizzle(new Database(process.env.DB_PATH!))
+    const dbPath = process.env.DB_PATH
+    if(!dbPath) throw new Error('DB_PATH is required')
+
+    const analyticsDbPath = process.env.ANALYTICS_DB_PATH
+    if(!analyticsDbPath) throw new Error('ANALYTICS_DB_PATH is required')
+
+    const timezone = process.env.SEARCH_TIMEZONE
+    if(!timezone) throw new Error('SEARCH_TIMEZONE is required')
+
+    const db = drizzle(new Database(dbPath))
     Db.migrate(db)
 
-    const sampleSaver = new C.SampleSaver()
+    const analytics = new A.Analytics({
+        log: mainLog.addedCtx('analytics'),
+        dbPath: analyticsDbPath,
+        timezone,
+    })
 
     await Promise.race([
         C.runPendingNotificationService(db, mainLog.addedCtx('pending-notif')),
         C.runLocationClassificationService(db, mainLog.addedCtx('loc-classify')),
-        // TODO: it should pass the samplers and not saver. Claude...
-        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), sampleSaver),
-        Lever.run(db, mainLog.addedCtx('lever'), sampleSaver),
-        Greenhouse.run(db, mainLog.addedCtx('greenhouse'), sampleSaver),
-        Bamboohr.run(db, mainLog.addedCtx('bamboohr'), sampleSaver),
-        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit'), sampleSaver),
-        Gem.run(db, mainLog.addedCtx('gem'), sampleSaver),
-        Rippling.run(db, mainLog.addedCtx('rippling'), sampleSaver),
-        Applytojob.run(db, mainLog.addedCtx('applytojob'), sampleSaver),
-        Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), sampleSaver),
-        Icims.run(db, mainLog.addedCtx('icims'), sampleSaver),
-        Workforcenow.run(db, mainLog.addedCtx('workforcenow'), sampleSaver.createSampler('workforcenow')),
-        Oraclecloud.run(db, mainLog.addedCtx('oraclecloud'), sampleSaver.createSampler('oraclecloud')),
+        analytics.run(),
+        Ashbyhq.run(db, mainLog.addedCtx('ashbyhq'), analytics.createSampler('ashbyhq')),
+        Lever.run(db, mainLog.addedCtx('lever'), analytics.createSampler('lever')),
+        Greenhouse.run(db, mainLog.addedCtx('greenhouse'), analytics.createSampler('greenhouse')),
+        Bamboohr.run(db, mainLog.addedCtx('bamboohr'), analytics.createSampler('bamboohr')),
+        Zohorecruit.run(db, mainLog.addedCtx('zohorecruit'), analytics.createSampler('zohorecruit')),
+        Gem.run(db, mainLog.addedCtx('gem'), analytics.createSampler('gem')),
+        Rippling.run(db, mainLog.addedCtx('rippling'), analytics.createSampler('rippling')),
+        Applytojob.run(db, mainLog.addedCtx('applytojob'), analytics.createSampler('applytojob')),
+        Smartrecruiters.run(db, mainLog.addedCtx('smartrecruiters'), analytics.createSampler('smartrecruiters')),
+        Icims.run(db, mainLog.addedCtx('icims'), analytics.createSampler('icims')),
+        Workforcenow.run(db, mainLog.addedCtx('workforcenow'), analytics.createSampler('workforcenow')),
+        Oraclecloud.run(db, mainLog.addedCtx('oraclecloud'), analytics.createSampler('oraclecloud')),
     ])
 
     mainLog.W('A sub-task exited. Restarting')

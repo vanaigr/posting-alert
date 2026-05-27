@@ -9,10 +9,11 @@ import * as N from '../lib/network.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 const { workforcenowCompany: Company, workforcenowJob: Job, workforcenowFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.Sampler) {
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
     await import('../sources/workforcenow/companies.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, {
             humanName: null,
@@ -42,7 +43,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.
         }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess], {

@@ -9,11 +9,11 @@ import * as Db from '../lib/db.ts'
 import * as N from '../lib/network.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 const { gCompany: Company, gJob: Job } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
-    const sampler = sampleSaver.createSampler('greenhouse')
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
     await import('../sources/greenhouse/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, { checkedEpochMs: null, exists: null, failCount: 0, tier: 0 })
     })
@@ -33,7 +33,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess])

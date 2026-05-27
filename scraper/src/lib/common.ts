@@ -9,8 +9,6 @@ import * as T from './temporal.ts'
 import * as N from './network.ts'
 import * as Db from './db.ts'
 
-export { Sampler, SampleSaver } from './analytics.ts'
-
 type InferTable<T> = T extends infer V ? V extends D.Table ? D.InferSelectModel<V> : never : never
 
 export type AnyCompanyTable = typeof Db.aCompany | typeof Db.lCompany | typeof Db.gCompany

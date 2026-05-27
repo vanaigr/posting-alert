@@ -9,13 +9,13 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 // Scraper info from: https://github.com/kalil0321/ats-scrapers/blob/main/src/jobhive/scrapers/jazzhr.py
 
 const { applytojobCompany: Company, applytojobJob: Job, applytojobFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
-    const sampler = sampleSaver.createSampler('applytojob')
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
     await import('../sources/applytojob/companyNames.json', { with: { type: 'json' } }).then(it => {
         C.populateCompanies(mainLog, db, Company, it.default, {
             checkedEpochMs: null,
@@ -41,7 +41,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess])

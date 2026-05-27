@@ -8,11 +8,11 @@ import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as N from '../lib/network.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 const { smartrecruitersJob: Job, smartrecruitersFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver: C.SampleSaver) {
-    const sampler = sampleSaver.createSampler('smartrecruiters')
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
 
     const jobsInProgress = new Set<string>()
     let rateLimit = false
@@ -25,7 +25,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampleSaver
         rateLimit = false
 
         mainLog.I('Tick')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 5 })
 
         const jobsToCheckDetails = db.select()

@@ -8,12 +8,13 @@ import * as T from '../lib/temporal.ts'
 import * as Db from '../lib/db.ts'
 import * as Tier from '../tier/index.ts'
 import * as C from '../lib/common.ts'
+import { type Sampler } from '../lib/analytics.ts'
 
 // Mostly copied from: https://github.com/kalil0321/ats-scrapers/blob/71d9a560a00071938a0ee0827d1e23badc104e93/src/jobhive/scrapers/oracle.py#L238
 
 const { oraclecloudCompany: Company, oraclecloudJob: Job, oraclecloudFetchJobDetails: FetchJobDetails } = Db
 
-export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.Sampler) {
+export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: Sampler) {
     await import('../sources/oraclecloud/companies.json', { with: { type: 'json' } }).then(it => {
         populateOraclecloudCompanies(mainLog, db, it.default)
     })
@@ -37,7 +38,7 @@ export async function run(db: BetterSQLite3Database, mainLog: L.Log, sampler: C.
         }
 
         mainLog.I('Tick (', [companiesInProcess.size], ' pending)')
-        sampler.count++
+        sampler.sample()
         const nextTick = T.Now.instant().add({ seconds: 1 })
 
         const toCheck = C.getCompaniesToCheck(db, Company, [...companiesInProcess], {
