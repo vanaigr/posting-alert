@@ -37,14 +37,15 @@ export function isJobRelevant(title: string) {
     return titleRegex.test(title)
         && !(
             /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design|devops|security|infrastructure)( (reliability|field))? engineer/i.test(title)
-                || /engineer in test/i.test(title)
+                || /\b(devrel|developer relations|engineer in test)\b/i.test(title)
                 || /SDET/.test(title)
         )
 }
 
 export function isJobDesired(title: string, description: string | undefined) {
-    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality|quality assurance|machine learning|head of|vp of|servicenow|salesforce|forward deployed|drupal|sharepoint|shopify)\b/i.test(title)
+    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality|quality assurance|machine learning|head of|vp of|servicenow|salesforce|forward deployed|drupal|sharepoint|shopify|python|java|power bi)\b/i.test(title)
         || /\b(UX)\b/.test(title)
+        || /(\bai(\/ml)? engineer\b)/i.test(title)
     if(ignoreTitle) return false
 
     if(!isJobRelevant(title)) return false
