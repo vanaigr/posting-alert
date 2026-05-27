@@ -1,14 +1,16 @@
 import 'dotenv/config'
 import crypto from 'node:crypto'
+import path from 'node:path'
 
 import Database from 'better-sqlite3'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as D from 'drizzle-orm'
 import System from 'systeminformation'
-
 import { serve } from '@hono/node-server'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
+import { serveStatic } from '@hono/node-server/serve-static'
+
 import * as T from './lib/temporal.ts'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
@@ -58,8 +60,10 @@ async function main() {
         maxAge: 600,
     }))
 
-    app.get('/stats', async(c) => {
-        const log = mainLog.addedCtx('/stats')
+    app.use('/*', serveStatic({ root: path.join(import.meta.dirname, '..', '..', 'web', 'dist') }))
+
+    app.get('/api/stats', async(c) => {
+        const log = mainLog.addedCtx('/api/stats')
 
         log.I('Serving')
 
@@ -106,8 +110,8 @@ async function main() {
         })
     })
 
-    app.get('/check', async(c) => {
-        const log = mainLog.addedCtx('/check')
+    app.get('/api/check', async(c) => {
+        const log = mainLog.addedCtx('/api/check')
 
         log.I('Serving')
 

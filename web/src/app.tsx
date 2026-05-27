@@ -101,7 +101,7 @@ export default function App() {
             if(!initData) return
 
             try {
-                const url = new URL('stats', import.meta.env.VITE_SERVER_URL)
+                const url = new URL('api/stats', import.meta.env.VITE_SERVER_URL)
                 const response = await fetch(url, {
                     headers: {
                         Authorization: 'Bearer ' + btoa(initData),
@@ -146,7 +146,7 @@ export default function App() {
 
         setCheck({ status: 'pending' })
         try {
-            const url = new URL('check', import.meta.env.VITE_SERVER_URL)
+            const url = new URL('api/check', import.meta.env.VITE_SERVER_URL)
             if(isUrl) {
                 url.searchParams.set('url', input.trim())
             }
