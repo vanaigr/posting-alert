@@ -6,6 +6,7 @@ type Stats = {
     ramTotalBytes: number
     ramFreeBytes: number
     storageFreeBytes: number // -1 - N/A
+    sampleCountByName: [name: string, count: number][]
     todayReactions: Record<string, number>
 }
 
@@ -210,6 +211,16 @@ export default function App() {
                 <div className='flex flex-col ml-2'>
                     {latest && Object.entries(latest?.todayReactions).map(([reaction, count]) => {
                         return <span>{reaction}: {count}</span>
+                    })}
+                    {!latest && '—'}
+                </div>
+            </div>
+
+            <div className='flex gap-2 text-sm flex-col'>
+                <span className='font-bold'>Samples:</span>
+                <div className='flex flex-col ml-2'>
+                    {latest && latest.sampleCountByName.map(([name, count]) => {
+                        return <span>{name}: {count}</span>
                     })}
                     {!latest && '—'}
                 </div>

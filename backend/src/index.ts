@@ -12,11 +12,14 @@ import { cors } from 'hono/cors'
 import * as T from './lib/temporal.ts'
 import * as L from './lib/log.ts'
 import * as U from './lib/util.ts'
+import * as A from './lib/analytics.ts'
 import * as Db from './lib/db.ts'
 import * as Check from '../../scraper/src/check.ts'
 
 let mainLog: L.Log | undefined
 
+const dbPath = process.env.DB_PATH
+const analyticsDbPath = process.env.ANALYTICS_DB_PATH
 const searchTimezone = process.env.SEARCH_TIMEZONE
 const expectedUserId = process.env.TELEGRAM_USER_ID
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN
@@ -33,13 +36,17 @@ async function main() {
         mainLog.E('Unhandled rejection from ', [promise], ': ', [reason])
     })
 
+    if(!dbPath) throw new Error('db path is required')
+    if(!analyticsDbPath) throw new Error('analytics db path is required')
+    if(!analyticsDbPath) throw new Error('analytics db path is required')
     if(!searchTimezone) throw new Error('search timezone is not provided')
     if(!expectedUserId) throw new Error('expected user id is not provided')
     if(!telegramBotToken) throw new Error('expected bot id is not provided')
     if(!allowedOrigin) throw new Error('allowed origin id is not provided')
     if(!telegramWebhookSecres) throw new Error('telegram webhook secret is not provided')
 
-    const db = drizzle(new Database(process.env.DB_PATH!))
+    const db = drizzle(new Database(dbPath))
+    const analyticsDb = drizzle(new Database(analyticsDbPath))
 
     const app = new Hono()
 
@@ -80,11 +87,21 @@ async function main() {
             }
         }
 
+        const samples = analyticsDb.select()
+            .from(A.samples)
+            .where(D.gte(A.samples.recordedAt, Date.now() - 60 * 1000))
+            .all()
+        const sampleCountByName = new Map<string, number>()
+        for(const sample of samples) {
+            sampleCountByName.set(sample.name, (sampleCountByName.get(sample.name) ?? 0) + 1)
+        }
+
         return c.json({
             cpuLoadPercents: cpu.cpus.map(it => it.load),
             ramTotalBytes: mem.total,
             ramFreeBytes: mem.available,
             storageFreeBytes: fileSystem.find(it => it.mount === '/')?.available ?? -1,
+            sampleCountByName: [...sampleCountByName].sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
             todayReactions,
         })
     })

@@ -110,7 +110,7 @@ function aggregateSamples(log: L.Log, db: BetterSQLite3Database, timezone: strin
     })
 }
 
-const samples = sqliteTable(
+export const samples = sqliteTable(
     'samples',
     {
         id: integer('id').primaryKey({ autoIncrement: true }),
@@ -119,7 +119,7 @@ const samples = sqliteTable(
         aggregated: integer('aggregated').notNull(),
     },
 )
-const statistics = sqliteTable(
+export const statistics = sqliteTable(
     'statistics',
     {
         hourStart: integer('hour_start').notNull(),
