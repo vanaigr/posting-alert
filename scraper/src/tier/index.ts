@@ -9,46 +9,16 @@ import states from './states.json' with { type: 'json' }
 import cityCodes from './cityCodes.json' with { type: 'json' }
 import stateCodes from './stateCodes.json' with { type: 'json' }
 
-export const citiesStatesRegex1 = new RegExp(
-    '\\b('
-        + [...cities, ...states].map(U.regexEscape).join('|')
-    + ')\\b',
-    'i'
-)
-export const citiesStatesRegex2 = new RegExp(
-    '\\b('
-        + [
-            ...stateCodes,
-            ...cityCodes,
-        ].map(U.regexEscape).join('|')
-        + ')\\b',
-)
+const wordBound = '\\b'
+const digit = '\\d'
+const space = '\\s'
 
-const cityStateRegexPart = `([a-zÀ-ÿ .'\\-]+,\\s+(${[...states, ...stateCodes].map(U.regexEscape).join('|')}))`
-
-// NOTE: occasionaly matches unrelated places e.g. "Berlin, DE" (because DE is a state code).
-export const citiesStatesRegex3 = new RegExp(
-    `^(${cityStateRegexPart}|.+,\\s+${cityStateRegexPart},\\s+\\d+)$`,
-    'i'
-)
-
-const titleRegex = /(engineer|developer|programmer|\beng\b|member of technical staff|\bswe\b)/i
 export function isJobRelevant(title: string) {
-    return titleRegex.test(title)
-        && !(
-            /(site|sales|solutions?|electrical|mechanical|civil|geotechnical|mining|legal|manufacturing|network|nuclear|design|devops|security|infrastructure)( (reliability|field))? engineer/i.test(title)
-                || /\b(devrel|developer relations|engineer in test)\b/i.test(title)
-                || /SDET/.test(title)
-        )
+    return titleRegex.test(title) && !ignoreTitleRegex.test(title)
 }
-
 export function isJobDesired(title: string, description: string | undefined) {
-    const ignoreTitle = /\b(director|lead|manager|staff|supervisor|principal|president|qa|quality|quality assurance|machine learning|head of|vp of|servicenow|salesforce|forward deployed|drupal|sharepoint|shopify|python|java|power bi)\b/i.test(title)
-        || /\b(UX)\b/.test(title)
-        || /(\bai(\/ml)? engineer\b)/i.test(title)
-    if(ignoreTitle) return false
-
     if(!isJobRelevant(title)) return false
+    if(nonDesiredTitleRegex.test(title)) return false
 
     if(description) {
         const descriptionDesired = /(typescript|type script|reactjs|nodejs)/i.test(description)
@@ -63,8 +33,6 @@ export function isJobDesired(title: string, description: string | undefined) {
 
     return true
 }
-
-const getYears = /(?<!\bfor )\b(\d+)(\s*[-–—]\s*\d+)?\s*\+? (yrs|years|experience)/g
 export function getYearsOfExperience(description: string) {
     return Math.max(
         ...[...description.matchAll(getYears)]
@@ -74,16 +42,65 @@ export function getYearsOfExperience(description: string) {
     )
 }
 
-export function testMyLocal(location: string) {
-    return /\bIL\b/.test(location) || /\b(illinois|chicago)\b/i.test(location)
-}
+const titleRegex = /(engineer|developer|programmer|\beng\b|member of technical staff|\bswe\b)/i
+const ignoreTitleRegex = new RegExp(
+    or([
+        concat([
+            wordBound,
+            or([
+                'civil', 'design', 'devops', 'electrical',
+                'geotechnical', 'infrastructure', 'legal', 'manufacturing',
+                'mechanical', 'mining', 'network', 'nuclear',
+                'sales', 'security', 'site', 'solutions?',
+                'data',
+            ]),
+            optional(concat([
+                ' ',
+                or(['reliability', 'field']),
+            ])),
+            ' engineer',
+        ]),
+        concat([
+            wordBound,
+            or(['devrel', 'developer relations', 'engineer in test', 'sdet']),
+            wordBound,
+        ]),
+    ]),
+    'i',
+)
+const nonDesiredTitleRegex = new RegExp(
+    concat([
+        wordBound,
+        or([
+            'director', 'head of', 'lead', 'president',
+            'principal', 'staff', 'supervisor', 'vp of',
+            'ai(/ml)? engineer', 'drupal', 'forward deployed', 'java',
+            'machine learning', 'manager', 'power bi', 'python', 'qa',
+            'quality', 'salesforce', 'servicenow',
+            'sharepoint', 'shopify', 'ux',
+        ]),
+        wordBound,
+    ]),
+    'i',
+)
+const getYears = new RegExp(
+    concat([
+        `(?<!${wordBound}for )`,
+        wordBound,
+        parenthesize(concat([digit, '+'])), // group 1
+        optional(concat([
+            space, '*',
+            '[-–—]',
+            space, '*',
+            digit, '+',
+        ])),
+        optional(or(['\\+', 'plus'])),
+        space, '+',
+        or(['yrs', 'years', 'experience']),
+    ]),
+    'g',
+)
 
-export function testMentionsUsConcrete(location: string) {
-    return location
-        .replaceAll(/\s*(;|\/|\|)\s*/g, ' | ')
-        .split(' | ')
-        .some(part => citiesStatesRegex3.test(part))
-}
 
 // Relevant location: in the US or remote worldwide
 // Desired location: in Illinois or (not (onsite or hybrid) and in the US) or remote worldwide
@@ -92,15 +109,12 @@ type LocationExtras = Partial<{ remote: boolean, mentionsUs: boolean }>
 
 export function isLocationRelevant(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
     if(testMyLocal(location)) return true
+    if(locationRemoteWorldwideRegex.test(location)) return true
 
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+    const mentionsUs = (extras.mentionsUs ?? false) || location.includes('US') || mentionsUsRegex.test(location)
     if(mentionsUs) return true
 
-    const mentionsUsConcrete = testMentionsUsConcrete(location)
-    if(mentionsUsConcrete) return true
+    if(testMentionsUsConcrete(location)) return true
 
     const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
     if(mayBeUs) {
@@ -111,17 +125,14 @@ export function isLocationRelevant(db: BetterSQLite3Database, location: string, 
 }
 export function isLocationDesired(db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
     if(testMyLocal(location)) return true
+    if(locationRemoteWorldwideRegex.test(location)) return true
 
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    const isRemote = (extras.remote ?? false) || locationRemoteRegex.test(location)
     if(isRemote) {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+        const mentionsUs = (extras.mentionsUs ?? false) || location.includes('US') || mentionsUsRegex.test(location)
         if(mentionsUs) return true
 
-        const mentionsUsConcrete = testMentionsUsConcrete(location)
-        if(mentionsUsConcrete) return true
+        if(testMentionsUsConcrete(location)) return true
 
         const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         if(mayBeUs) {
@@ -133,17 +144,14 @@ export function isLocationDesired(db: BetterSQLite3Database, location: string, e
 }
 export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Database, location: string, extras: LocationExtras = {}) {
     if(testMyLocal(location)) return true
+    if(locationRemoteWorldwideRegex.test(location)) return true
 
-    const isRemoteWorldwide = location.toLowerCase() === 'remote'
-    if(isRemoteWorldwide) return true
-
-    const isRemote = /(remote|nationwide|continental)/i.test(location) || (extras.remote ?? false)
+    const isRemote = (extras.remote ?? false) || locationRemoteRegex.test(location)
     if(isRemote) {
-        const mentionsUs = location.includes('US') || /(united states|u\. ?s\.|east coast|west coast)/i.test(location) || (extras.mentionsUs ?? false)
+        const mentionsUs = (extras.mentionsUs ?? false) || location.includes('US') || mentionsUsRegex.test(location)
         if(mentionsUs) return true
 
-        const mentionsUsConcrete = testMentionsUsConcrete(location)
-        if(mentionsUsConcrete) return true
+        if(testMentionsUsConcrete(location)) return true
 
         const mayBeUs = citiesStatesRegex1.test(location) || citiesStatesRegex2.test(location)
         if(mayBeUs) {
@@ -153,9 +161,59 @@ export async function isLocationDesiredFull(log: L.Log, db: BetterSQLite3Databas
 
     return false
 }
+export function testMyLocal(location: string) {
+    return myCityStateRegex.test(location) || myCityStateRegex2.test(location)
+}
+
+function testMentionsUsConcrete(location: string) {
+    return location.split(locationSeparatorRegex).some(part => citiesStatesRegex3.test(part.trim()))
+}
+
+export const citiesStatesRegex1 = new RegExp(
+    concat([
+        '\\b',
+        or([...cities, ...states].map(U.regexEscape)),
+        '\\b',
+    ]),
+    'i',
+)
+export const citiesStatesRegex2 = new RegExp(
+    concat([
+        '\\b',
+        or([...stateCodes, ...cityCodes].map(U.regexEscape)),
+        '\\b',
+    ])
+)
+const cityStateRegexPart = `([a-zÀ-ÿ .'\\-]+,\\s+(${[...states, ...stateCodes].map(U.regexEscape).join('|')}))`
+// NOTE: occasionaly matches unrelated places e.g. "Berlin, DE" (because DE is a state code).
+export const citiesStatesRegex3 = new RegExp(
+    `^(${cityStateRegexPart}|.+,\\s+${cityStateRegexPart},\\s+\\d+)$`,
+    'i'
+)
+const myCityStateRegex = /\bIL\b/
+const myCityStateRegex2 = /\b(illinois|chicago)\b/i
+const locationSeparatorRegex = new RegExp(or(['|', ';', '/'].map(it => U.regexEscape(it))))
+const locationRemoteWorldwideRegex = /^remote$/i
+const mentionsUsRegex = /(united states|u\. ?s\.|east coast|west coast)/i
+const locationRemoteRegex = /(remote|nationwide|continental)/i
+
 
 export function isRequiringClearance(title: string, description: string | undefined) {
     const text = [title, description].filter(it => it !== undefined && it).join('\n')
 
     return /(\bTS\/SCI\b|\b(us|u\. ?s\.) citizen|\bclearance\b|\bexport (control|regulation))/i.test(text)
+}
+
+
+function parenthesize(inner: string) {
+    return '(' + inner + ')'
+}
+function or(parts: readonly string[]) {
+    return parenthesize(parts.map(parenthesize).join('|'))
+}
+function concat(parts: readonly string[]) {
+    return parts.join('')
+}
+function optional(inner: string) {
+    return parenthesize(inner) + '?'
 }
