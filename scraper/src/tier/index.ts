@@ -85,7 +85,7 @@ const getYears = new RegExp(
     concat([
         `(?<!${wordBound}for )`,
         wordBound,
-        parenthesize(concat([digit, '+'])), // group 1
+        '(', concat([digit, '+']), ')', // group 1
         optional(concat([
             space, '*',
             '[-–—]',
@@ -190,7 +190,7 @@ export const citiesStatesRegex3 = new RegExp(
 )
 const myCityStateRegex = /\bIL\b/
 const myCityStateRegex2 = /\b(illinois|chicago)\b/i
-const locationSeparatorRegex = new RegExp(or(['|', ';', '/'].map(it => U.regexEscape(it))))
+const locationSeparatorRegex = new RegExp(or(['|', ';', '/'].map(it => U.regexEscape(it))), 'g')
 const locationRemoteWorldwideRegex = /^remote$/i
 const mentionsUsRegex = /(united states|u\. ?s\.|east coast|west coast)/i
 const locationRemoteRegex = /(remote|nationwide|continental)/i
@@ -220,15 +220,12 @@ export function getJobWarnings(title: string, description: string | undefined) {
 }
 
 
-function parenthesize(inner: string) {
-    return '(' + inner + ')'
-}
 function or(parts: readonly string[]) {
-    return parenthesize(parts.map(parenthesize).join('|'))
+    return '(?:' + parts.map(it => '(?:' + it + ')').join('|') + ')'
 }
 function concat(parts: readonly string[]) {
     return parts.join('')
 }
 function optional(inner: string) {
-    return parenthesize(inner) + '?'
+    return '(?:' + inner + ')?'
 }
