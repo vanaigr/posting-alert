@@ -304,8 +304,8 @@ async function processJobDetail(
                 },
                 message: job.jobOpeningName + ' @ ' + dbJob.companyName + '\n'
                     + workplaceType + ': ' + location + '\n'
-                    + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
                     + Tier.getJobWarnings(job.jobOpeningName, longInfo ? C.parseHtml(longInfo.description) : undefined)
+                    + `Bamboo ${fetchDetails.companyTier} < ${maxAgo} ago: `
                     + `https://${dbJob.companyName}.bamboohr.com/careers/${encodeURIComponent(job.id)}`
             },
         )

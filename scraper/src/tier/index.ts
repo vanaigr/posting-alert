@@ -216,7 +216,7 @@ export function getJobWarnings(title: string, description: string | undefined) {
         warnings.push('⚠️ no desc')
     }
 
-    return warnings.join(' | ')
+    return warnings.join(' | ') + '\n'
 }
 
 
