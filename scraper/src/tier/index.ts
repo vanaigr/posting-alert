@@ -26,14 +26,14 @@ export function isJobDesired(title: string, description: string | undefined) {
         if(!descriptionDesired) return false
     }
 
-    const years = getYearsOfExperience([title, description].filter(it => it).join('\n'))
+    const years = getYearsOfExperience([title, description].filter(it => it !== undefined))
     if(years >= 4) return false
 
     return true
 }
-export function getYearsOfExperience(description: string) {
+export function getYearsOfExperience(parts: readonly string[]) {
     return Math.max(
-        ...[...description.matchAll(getYears)]
+        ...parts.flatMap(it => [...it.matchAll(getYears)])
             .map(it => Number.parseInt(it[1], 10))
             // filter out false-positives from companies writing "we've been doing X 123 years"
             .filter(it => it <= 10),
@@ -200,6 +200,23 @@ export function isRequiringClearance(title: string, description: string | undefi
     const text = [title, description].filter(it => it !== undefined && it).join('\n')
 
     return /(\bTS\/SCI\b|\b(us|u\. ?s\.) citizen|\bclearance\b|\bexport (control|regulation))/i.test(text)
+}
+export function getJobWarnings(title: string, description: string | undefined) {
+    const warnings: string[] = []
+
+    const yoe = getYearsOfExperience([title, description].filter(it => it !== undefined))
+    const yoeText = isFinite(yoe) ? '' + yoe : '?'
+    warnings.push(yoeText + ' YoE')
+
+    if(isRequiringClearance(title, description)) {
+        warnings.push('⚠️ clearance?')
+    }
+
+    if(!description) {
+        warnings.push('⚠️ no desc')
+    }
+
+    return warnings.join(' | ')
 }
 
 

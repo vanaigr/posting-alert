@@ -310,8 +310,8 @@ async function processJobDetail(
                 },
                 message: jobInfo.title + ' @ ' + dbJob.companyName + '\n'
                     + jobInfo.locations.join(' | ') + '\n'
+                    + Tier.getJobWarnings(jobInfo.title, longInfo ? C.parseHtml(longInfo.descriptionHtml) : undefined)
                     + `Rippling ${fetchDetails.companyTier} ${agoString}: ` + jobInfo.url
-                    + (Tier.isRequiringClearance(jobInfo.title, longInfo ? C.parseHtml(longInfo.descriptionHtml) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

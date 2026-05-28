@@ -367,8 +367,8 @@ async function processJobDetail(
                 },
                 message: job.title + ' @ ' + dbJob.companyName + '\n'
                     + (job.location || 'none') + '\n'
+                    + Tier.getJobWarnings(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined)
                     + `Icims ${fetchDetails.companyTier} < ${maxAgo} ago: ` + url
-                    + (Tier.isRequiringClearance(job.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

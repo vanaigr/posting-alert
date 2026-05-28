@@ -168,8 +168,8 @@ async function checkCompany(
                         },
                         message: jobInfo.title + ' @ ' + company.name + '\n'
                             + locations.join(' | ') + '\n'
+                            + Tier.getJobWarnings(jobInfo.title, description)
                             + `Gem ${tier} < ${maxAgo} ago: https://jobs.gem.com/${encodeURIComponent(company.name)}/${id}`
-                            + (Tier.isRequiringClearance(jobInfo.title, description) ? '\n⚠️ clearance?' : '')
                     },
                 ))
             }

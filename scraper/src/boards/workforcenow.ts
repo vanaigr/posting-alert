@@ -355,8 +355,8 @@ async function processJobDetail(
                 },
                 message: info.title + ' @ ' + (dbCompany.humanName || dbJob.companyName) + '\n'
                     + location + '\n'
+                    + Tier.getJobWarnings(info.title, longInfo ? C.parseHtml(longInfo.description) : undefined)
                     + `WFN ${fetchDetails.companyTier} ${ago} (< ${maxAgo}) ago: ` + url
-                    + (Tier.isRequiringClearance(info.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }

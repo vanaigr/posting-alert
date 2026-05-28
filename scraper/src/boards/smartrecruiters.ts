@@ -261,9 +261,8 @@ async function processJobDetail(
                 },
                 message: info.name + ' @ ' + info.company.identifier + '\n'
                     + remoteness + ': ' + location + '\n'
-                    + `SR ${ago} (< ${maxAgo}) ago: `
-                    + info.applyUrl
-                    + (Tier.isRequiringClearance(info.name, getDescription(longInfo.description)) ? '\n⚠️ clearance?' : '')
+                    + Tier.getJobWarnings(info.name, getDescription(longInfo.description))
+                    + `SR ${ago} (< ${maxAgo}) ago: ` + info.applyUrl
             },
         )
     }

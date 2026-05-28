@@ -380,8 +380,8 @@ async function processJobDetail(
                 },
                 message: info.title + ' @ ' + (dbCompany.humanName || `${dbCompany.subdomain}/${dbCompany.region}`) + '\n'
                     + location + '\n'
+                    + Tier.getJobWarnings(info.title, longInfo ? C.parseHtml(longInfo.description) : undefined)
                     + `Oracle ${fetchDetails.companyTier} (< ${maxAgo}) ago: ` + url
-                    + (Tier.isRequiringClearance(info.title, longInfo ? C.parseHtml(longInfo.description) : undefined) ? '\n⚠️ clearance?' : '')
             },
         )
     }
