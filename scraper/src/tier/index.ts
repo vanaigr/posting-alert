@@ -26,10 +26,8 @@ export function isJobDesired(title: string, description: string | undefined) {
         if(!descriptionDesired) return false
     }
 
-    if(description) {
-        const years = getYearsOfExperience(description)
-        if(years >= 4) return false
-    }
+    const years = getYearsOfExperience([title, description].filter(it => it).join('\n'))
+    if(years >= 4) return false
 
     return true
 }
