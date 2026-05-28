@@ -300,7 +300,7 @@ async function processJobDetail(
                     id: fetchRow.ashbyhq_job.id,
                 },
                 message: info.job.title + ' @ ' + fetchRow.ashbyhq_job.companyName + '\n'
-                    + info.job.workplaceType + ': ' + getJobLocation(info) + '\n'
+                    + (info.job.workplaceType || 'Unknown') + ': ' + getJobLocation(info) + '\n'
                     + Tier.getJobWarnings(info.job.title, longInfo.descriptionHtml ? C.parseHtml(longInfo.descriptionHtml) : undefined)
                     + `Ashby ${tier} < ${maxAgo} ago: `
                     + `https://jobs.ashbyhq.com/${encodeURIComponent(fetchRow.ashbyhq_job.companyName)}/${encodeURIComponent(fetchRow.ashbyhq_job.id)}`
