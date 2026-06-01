@@ -96,7 +96,7 @@ const getYears = new RegExp(
         space, '+',
         or(['yrs', 'years', 'experience']),
     ]),
-    'g',
+    'gi',
 )
 
 
